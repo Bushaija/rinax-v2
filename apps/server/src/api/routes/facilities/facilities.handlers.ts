@@ -1,0 +1,599 @@
+import { eq, asc, and, notInArray, inArray, sql, lte, gte } from "drizzle-orm";
+import * as HttpStatusCodes from "stoker/http-status-codes";
+
+import type { AppRouteHandler } from "@/api/lib/types";
+import { db } from "@/api/db";
+import { facilities, schemaFormDataEntries, projects, reportingPeriods, districts } from "@/api/db/schema";
+import { getCurrentFiscalQuarter } from "@/lib/utils";
+import { validateReportingPeriod } from "./reporting-period-validation";
+import type { ListRoute, GetOneRoute, GetByNameRoute, GetByDistrictRoute, GetPlannedRoute, GetExecutionRoute, GetAllRoute } from "./facilities.routes";
+
+// Helper function to get active reporting period
+async function getActiveReportingPeriod() {
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    const activePeriod = await db.query.reportingPeriods.findFirst({
+        where: and(
+            eq(reportingPeriods.status, 'ACTIVE'),
+            lte(reportingPeriods.startDate, currentDate),
+            gte(reportingPeriods.endDate, currentDate)
+        ),
+    });
+
+    return activePeriod;
+}
+
+// Types for execution status analysis
+interface FacilityExecutionStatus {
+    facilityId: number;
+    facilityName: string;
+    executedQuarters: string[];
+    availableQuarters: string[];
+}
+
+// Function to analyze execution status for facilities within a reporting period
+async function analyzeExecutionStatus(
+    program: string,
+    facilityType: string,
+    districtId: number,
+    reportingPeriodId: number,
+    plannedFacilityIds: number[]
+): Promise<FacilityExecutionStatus[]> {
+    if (plannedFacilityIds.length === 0) {
+        return [];
+    }
+
+    // Query all execution data for facilities within the reporting period
+    const executionData = await db
+        .select({
+            facilityId: schemaFormDataEntries.facilityId,
+            facilityName: facilities.name,
+            quarter: sql<string>`${schemaFormDataEntries.formData}->>'quarter'`.as('quarter'),
+        })
+        .from(schemaFormDataEntries)
+        .innerJoin(
+            projects,
+            eq(schemaFormDataEntries.projectId, projects.id)
+        )
+        .innerJoin(
+            facilities,
+            eq(schemaFormDataEntries.facilityId, facilities.id)
+        )
+        .where(
+            and(
+                eq(schemaFormDataEntries.entityType, "execution"),
+                eq(projects.projectType, program as "HIV" | "Malaria" | "TB"),
+                eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+                eq(facilities.districtId, districtId),
+                eq(schemaFormDataEntries.reportingPeriodId, reportingPeriodId),
+                inArray(schemaFormDataEntries.facilityId, plannedFacilityIds)
+            )
+        );
+
+    // Get facility names for all planned facilities
+    const facilityNames = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+        })
+        .from(facilities)
+        .where(inArray(facilities.id, plannedFacilityIds));
+
+    const facilityNameMap = new Map(facilityNames.map(f => [f.id, f.name]));
+
+    // Group execution data by facility and extract executed quarters
+    const facilityExecutionMap = new Map<number, Set<string>>();
+
+    for (const execution of executionData) {
+        if (!facilityExecutionMap.has(execution.facilityId)) {
+            facilityExecutionMap.set(execution.facilityId, new Set());
+        }
+        if (execution.quarter && typeof execution.quarter === 'string') {
+            facilityExecutionMap.get(execution.facilityId)!.add(execution.quarter);
+        }
+    }
+
+    // Calculate available quarters for each facility (Q1-Q4 minus executed quarters)
+    const allQuarters = ["Q1", "Q2", "Q3", "Q4"];
+    const facilityStatuses: FacilityExecutionStatus[] = [];
+
+    for (const facilityId of plannedFacilityIds) {
+        const executedQuarters = Array.from(facilityExecutionMap.get(facilityId) || new Set()) as string[];
+        const availableQuarters = allQuarters.filter(quarter => !executedQuarters.includes(quarter));
+
+        // Only include facilities that have available quarters
+        if (availableQuarters.length > 0) {
+            facilityStatuses.push({
+                facilityId,
+                facilityName: facilityNameMap.get(facilityId) || `Facility ${facilityId}`,
+                executedQuarters,
+                availableQuarters,
+            });
+        }
+    }
+
+    return facilityStatuses;
+}
+
+// Function to get facilities executed for a specific quarter within a reporting period
+async function getExecutedFacilitiesForQuarter(
+    program: string,
+    facilityType: string,
+    districtId: number,
+    reportingPeriodId: number,
+    quarter: string
+): Promise<number[]> {
+    console.log(`[getExecutedFacilitiesForQuarter] Checking for quarter: ${quarter}, reportingPeriodId: ${reportingPeriodId}`);
+    
+    const executedFacilityIds = await db
+        .selectDistinct({
+            facilityId: schemaFormDataEntries.facilityId,
+            quarter: sql<string>`${schemaFormDataEntries.formData}->>'quarter'`.as('quarter'),
+        })
+        .from(schemaFormDataEntries)
+        .innerJoin(
+            projects,
+            eq(schemaFormDataEntries.projectId, projects.id)
+        )
+        .innerJoin(
+            facilities,
+            eq(schemaFormDataEntries.facilityId, facilities.id)
+        )
+        .where(
+            and(
+                eq(schemaFormDataEntries.entityType, "execution"),
+                eq(projects.projectType, program as "HIV" | "Malaria" | "TB"),
+                eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+                eq(facilities.districtId, districtId),
+                eq(schemaFormDataEntries.reportingPeriodId, reportingPeriodId),
+                // Quarter-specific filtering using form_data JSON query (not metadata)
+                sql`${schemaFormDataEntries.formData}->>'quarter' = ${quarter}`
+            )
+        );
+
+    console.log(`[getExecutedFacilitiesForQuarter] Found executed facilities:`, executedFacilityIds);
+    
+    return executedFacilityIds.map(f => f.facilityId);
+}
+
+export const getByDistrict: AppRouteHandler<GetByDistrictRoute> = async (c) => {
+    const { districtId } = c.req.query();
+
+    const data = await db.select({
+        id: facilities.id,
+        name: facilities.name,
+        facilityType: facilities.facilityType,
+    })
+        .from(facilities)
+        .where(eq(facilities.districtId, parseInt(districtId)))
+        .orderBy(asc(facilities.name));
+
+    if (data.length === 0) {
+        return c.json(
+            {
+                message: "Facilities not found for this district",
+            },
+            HttpStatusCodes.NOT_FOUND
+        );
+    }
+
+    return c.json(data, HttpStatusCodes.OK);
+};
+
+export const list: AppRouteHandler<ListRoute> = async (c) => {
+    const data = await db.query.facilities.findMany();
+    return c.json(data);
+};
+
+export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
+    const { id } = c.req.param();
+    const data = await db.query.facilities.findFirst({
+        where: eq(facilities.id, parseInt(id)),
+    });
+
+    if (!data) {
+        return c.json(
+            {
+                message: "Facility not found",
+            },
+            HttpStatusCodes.NOT_FOUND
+        );
+    }
+    return c.json(data, HttpStatusCodes.OK);
+};
+
+export const getByName: AppRouteHandler<GetByNameRoute> = async (c) => {
+    const query = c.req.query();
+
+    if (!query.facilityName || query.facilityName.trim() === '') {
+        return c.json(
+            {
+                message: "Facility name is required",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    const data = await db.query.facilities.findFirst({
+        where: eq(facilities.name, query.facilityName.trim()),
+    });
+
+    if (!data) {
+        return c.json(
+            {
+                message: "Facility not found",
+            },
+            HttpStatusCodes.NOT_FOUND
+        );
+    }
+
+    return c.json({ facilityId: data.id, facilityName: data.name }, HttpStatusCodes.OK);
+};
+
+export const getPlanned: AppRouteHandler<GetPlannedRoute> = async (c) => {
+    const { program, facilityType, districtId, reportingPeriodId } = c.req.query();
+
+    // Business rule: TB program only allows hospital facility type
+    if (program === "TB" && facilityType !== "hospital") {
+        return c.json(
+            {
+                message: "TB program requires hospital facility type",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Parse districtId to integer with validation
+    const parsedDistrictId = parseInt(districtId);
+
+    if (isNaN(parsedDistrictId) || parsedDistrictId <= 0) {
+        return c.json(
+            {
+                message: "District ID must be a positive integer",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Get reporting period ID - use provided or fetch active
+    let parsedReportingPeriodId: number;
+
+    if (reportingPeriodId) {
+        parsedReportingPeriodId = parseInt(reportingPeriodId);
+
+        if (isNaN(parsedReportingPeriodId) || parsedReportingPeriodId <= 0) {
+            return c.json(
+                {
+                    message: "Reporting Period ID must be a positive integer",
+                },
+                HttpStatusCodes.BAD_REQUEST
+            );
+        }
+    } else {
+        // Fetch active reporting period
+        const activePeriod = await getActiveReportingPeriod();
+
+        if (!activePeriod) {
+            return c.json(
+                {
+                    message: "No active reporting period found",
+                },
+                HttpStatusCodes.BAD_REQUEST
+            );
+        }
+
+        parsedReportingPeriodId = activePeriod.id;
+    }
+
+    // Validate reporting period
+    const validationResult = await validateReportingPeriod(parsedReportingPeriodId, 'planning');
+    if (!validationResult.isValid) {
+        return c.json(
+            {
+                message: validationResult.errorMessage,
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Get facility IDs that have already been planned for this (program, facilityType, districtId, reportingPeriodId) combination
+    const plannedFacilityIds = await db
+        .selectDistinct({
+            facilityId: schemaFormDataEntries.facilityId,
+        })
+        .from(schemaFormDataEntries)
+        .innerJoin(
+            projects,
+            eq(schemaFormDataEntries.projectId, projects.id)
+        )
+        .innerJoin(
+            facilities,
+            eq(schemaFormDataEntries.facilityId, facilities.id)
+        )
+        .where(
+            and(
+                eq(schemaFormDataEntries.entityType, "planning"),
+                eq(projects.projectType, program as "HIV" | "Malaria" | "TB"),
+                eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+                eq(facilities.districtId, parsedDistrictId),
+                eq(schemaFormDataEntries.reportingPeriodId, parsedReportingPeriodId)
+            )
+        );
+
+    const excludedIds = plannedFacilityIds.map(f => f.facilityId);
+
+    // Build the where conditions: facilityType + districtId filter
+    const conditions = [
+        eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+        eq(facilities.districtId, parsedDistrictId)
+    ];
+
+    // Exclude already planned facilities if any exist
+    if (excludedIds.length > 0) {
+        conditions.push(notInArray(facilities.id, excludedIds));
+    }
+
+    // Get all facilities matching the criteria within the accountant's district
+    const availableFacilities = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+        })
+        .from(facilities)
+        .where(and(...conditions))
+        .orderBy(asc(facilities.name));
+
+    return c.json(
+        {
+            program,
+            facilityType,
+            districtId: parsedDistrictId,
+            reportingPeriodId: parsedReportingPeriodId,
+            availableFacilities,
+            count: availableFacilities.length,
+        },
+        HttpStatusCodes.OK
+    );
+};
+
+export const getExecution: AppRouteHandler<GetExecutionRoute> = async (c) => {
+    const { program, facilityType, districtId, reportingPeriodId, quarter } = c.req.query();
+
+    // Business rule: TB program only allows hospital facility type
+    if (program === "TB" && facilityType !== "hospital") {
+        return c.json(
+            {
+                message: "TB program requires hospital facility type",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Parse districtId to integer with validation
+    const parsedDistrictId = parseInt(districtId);
+
+    if (isNaN(parsedDistrictId) || parsedDistrictId <= 0) {
+        return c.json(
+            {
+                message: "District ID must be a positive integer",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Get reporting period ID - use provided or fetch active
+    let parsedReportingPeriodId: number;
+
+    if (reportingPeriodId) {
+        parsedReportingPeriodId = parseInt(reportingPeriodId);
+
+        if (isNaN(parsedReportingPeriodId) || parsedReportingPeriodId <= 0) {
+            return c.json(
+                {
+                    message: "Reporting Period ID must be a positive integer",
+                },
+                HttpStatusCodes.BAD_REQUEST
+            );
+        }
+    } else {
+        // Fetch active reporting period
+        const activePeriod = await getActiveReportingPeriod();
+
+        if (!activePeriod) {
+            return c.json(
+                {
+                    message: "No active reporting period found",
+                },
+                HttpStatusCodes.BAD_REQUEST
+            );
+        }
+
+        parsedReportingPeriodId = activePeriod.id;
+    }
+
+    // Validate quarter format when provided (additional validation beyond Zod)
+    if (quarter && !["Q1", "Q2", "Q3", "Q4"].includes(quarter)) {
+        return c.json(
+            {
+                message: "Quarter must be in format Q1, Q2, Q3, or Q4",
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Validate reporting period
+    const validationResult = await validateReportingPeriod(parsedReportingPeriodId, 'execution');
+    if (!validationResult.isValid) {
+        return c.json(
+            {
+                message: validationResult.errorMessage,
+            },
+            HttpStatusCodes.BAD_REQUEST
+        );
+    }
+
+    // Auto-detect current fiscal quarter
+    const currentQuarter = getCurrentFiscalQuarter();
+
+    // Detect operation mode: quarter discovery vs single-quarter
+    const isQuarterDiscoveryMode = !quarter;
+    const targetQuarter = quarter || currentQuarter;
+
+    // Step 1: Get facility IDs that HAVE been planned for this (program, facilityType, districtId, reportingPeriodId)
+    const plannedFacilityIds = await db
+        .selectDistinct({
+            facilityId: schemaFormDataEntries.facilityId,
+        })
+        .from(schemaFormDataEntries)
+        .innerJoin(
+            projects,
+            eq(schemaFormDataEntries.projectId, projects.id)
+        )
+        .innerJoin(
+            facilities,
+            eq(schemaFormDataEntries.facilityId, facilities.id)
+        )
+        .where(
+            and(
+                eq(schemaFormDataEntries.entityType, "planning"),
+                eq(projects.projectType, program as "HIV" | "Malaria" | "TB"),
+                eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+                eq(facilities.districtId, parsedDistrictId),
+                eq(schemaFormDataEntries.reportingPeriodId, parsedReportingPeriodId)
+            )
+        );
+
+    const plannedIds = plannedFacilityIds.map(f => f.facilityId);
+
+    // If no facilities have been planned, return empty result for both modes
+    if (plannedIds.length === 0) {
+        if (isQuarterDiscoveryMode) {
+            return c.json(
+                {
+                    program,
+                    facilityType,
+                    districtId: parsedDistrictId,
+                    reportingPeriodId: parsedReportingPeriodId,
+                    currentQuarter,
+                    availableFacilities: [],
+                    count: 0,
+                },
+                HttpStatusCodes.OK
+            );
+        } else {
+            return c.json(
+                {
+                    program,
+                    facilityType,
+                    districtId: parsedDistrictId,
+                    reportingPeriodId: parsedReportingPeriodId,
+                    quarter: targetQuarter,
+                    currentQuarter,
+                    availableFacilities: [],
+                    count: 0,
+                },
+                HttpStatusCodes.OK
+            );
+        }
+    }
+
+    // Branch handler logic based on operation mode
+    if (isQuarterDiscoveryMode) {
+        // Quarter Discovery Mode: Return facilities with their available quarters
+        const facilityStatuses = await analyzeExecutionStatus(
+            program,
+            facilityType,
+            parsedDistrictId,
+            parsedReportingPeriodId,
+            plannedIds
+        );
+
+        // Generate quarter discovery response
+        const availableFacilities = facilityStatuses.map(status => ({
+            id: status.facilityId,
+            name: status.facilityName,
+            availableQuarters: status.availableQuarters,
+        }));
+
+        return c.json(
+            {
+                program,
+                facilityType,
+                districtId: parsedDistrictId,
+                reportingPeriodId: parsedReportingPeriodId,
+                currentQuarter,
+                availableFacilities,
+                count: availableFacilities.length,
+            },
+            HttpStatusCodes.OK
+        );
+    } else {
+        // Single Quarter Mode: Return facilities available for specific quarter
+        console.log(`[getExecution] Single Quarter Mode - Quarter: ${targetQuarter}, Planned IDs:`, plannedIds);
+        
+        const executedIds = await getExecutedFacilitiesForQuarter(
+            program,
+            facilityType,
+            parsedDistrictId,
+            parsedReportingPeriodId,
+            targetQuarter
+        );
+
+        console.log(`[getExecution] Executed IDs for ${targetQuarter}:`, executedIds);
+
+        // Build query conditions
+        const conditions = [
+            eq(facilities.facilityType, facilityType as "hospital" | "health_center"),
+            eq(facilities.districtId, parsedDistrictId),
+            inArray(facilities.id, plannedIds), // Must have a plan
+        ];
+
+        // Exclude facilities already executed for target quarter
+        if (executedIds.length > 0) {
+            conditions.push(notInArray(facilities.id, executedIds));
+            console.log(`[getExecution] Excluding executed facilities:`, executedIds);
+        } else {
+            console.log(`[getExecution] No executed facilities to exclude for ${targetQuarter}`);
+        }
+
+        // Get available facilities for execution
+        const availableFacilities = await db
+            .select({
+                id: facilities.id,
+                name: facilities.name,
+            })
+            .from(facilities)
+            .where(and(...conditions))
+            .orderBy(asc(facilities.name));
+
+        return c.json(
+            {
+                program,
+                facilityType,
+                districtId: parsedDistrictId,
+                reportingPeriodId: parsedReportingPeriodId,
+                quarter: targetQuarter,
+                currentQuarter,
+                availableFacilities,
+                count: availableFacilities.length,
+            },
+            HttpStatusCodes.OK
+        );
+    }
+};
+
+export const getAll: AppRouteHandler<GetAllRoute> = async (c) => {
+    const data = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+            facilityType: facilities.facilityType,
+            districtId: facilities.districtId,
+            districtName: districts.name,
+        })
+        .from(facilities)
+        .innerJoin(districts, eq(facilities.districtId, districts.id))
+        .orderBy(asc(districts.name), asc(facilities.name));
+
+    return c.json(data, HttpStatusCodes.OK);
+};
