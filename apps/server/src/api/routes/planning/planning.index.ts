@@ -15,6 +15,7 @@ const router = createRouter()
   
   // NEW: Approval workflow routes
   .openapi(routes.submitForApproval, handlers.submitForApproval)
+  .openapi(routes.approvePlanning, handlers.approvePlanning)
   .openapi(routes.reviewPlanning, handlers.reviewPlanning)
   .openapi(routes.bulkReviewPlanning, handlers.bulkReviewPlanning)
   

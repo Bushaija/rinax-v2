@@ -2,7 +2,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import * as HttpStatusCodes from "stoker/http-status-codes";
 
 import { db } from "@/api/db";
-import { schemaFormDataEntries, dynamicActivities, facilities, projects, reportingPeriods, schemaActivityCategories, formSchemas } from "@/api/db/schema";
+import { schemaFormDataEntries, dynamicActivities, facilities, projects, reportingPeriods, schemaActivityCategories, formSchemas, users } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 
 // TODO: create computation.service & validation.service
@@ -23,12 +23,17 @@ import type {
   UploadFileRoute,
   ReviewPlanningRoute,
   BulkReviewPlanningRoute,
+  ApprovePlanningRoute,
   GetApprovalHistoryRoute,
   SubmitForApprovalRoute
 } from "./planning.routes";
 import { getUserContext, canAccessFacility, hasAdminAccess } from "@/api/lib/utils/get-user-facility";
 import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
 import { fileParserService } from "@/api/lib/services/file-parser.service";
+import { approvalService } from "@/lib/services/approval.service";
+import { auditService } from "@/lib/services/audit.service";
+import { notificationService } from "@/lib/services/notification.service";
+import { ApprovalError, ApprovalErrorFactory, isApprovalError } from "@/lib/errors/approval.errors";
 
 
 export const list: AppRouteHandler<ListRoute> = async (c) => {
@@ -456,7 +461,19 @@ export const create: AppRouteHandler<CreateRoute> = async (c) => {
       formData: normalizedFormData,
       computedValues: computedValues,
       validationState: { isValid: true, lastValidated: new Date().toISOString() },
-      metadata: body.metadata || {},
+      metadata: {
+        ...body.metadata || {},
+        // Creator identity tracking for audit purposes
+        createdBy: userContext.userId,
+        createdAt: new Date().toISOString(),
+        submissionSource: 'manual_creation',
+        // Generate unique identifier for submitted plan
+        submissionId: `PLAN_${Date.now()}_${userContext.userId}`,
+        // Timestamp for submitted plan
+        submittedAt: new Date().toISOString(),
+      },
+      // Set default approval status to PENDING
+      approvalStatus: 'PENDING',
       createdBy: userContext.userId,
       updatedBy: userContext.userId,
     }).returning();
@@ -470,6 +487,17 @@ export const create: AppRouteHandler<CreateRoute> = async (c) => {
         reportingPeriod: true,
       },
     });
+
+    // Send notification to admins about pending review
+    try {
+      const adminIds = await notificationService.getAdminUsersForNotification();
+      if (adminIds.length > 0) {
+        await notificationService.notifyPendingReview(result.id, adminIds);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send pending review notification:', notificationError);
+      // Don't fail the creation if notification fails
+    }
 
     return c.json(created, HttpStatusCodes.CREATED);
   } catch (error: any) {
@@ -1127,7 +1155,9 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
           projectId: schemaFormDataEntries.projectId,
           reportingPeriodId: schemaFormDataEntries.reportingPeriodId,
           entityType: schemaFormDataEntries.entityType,
-          approvalStatus: schemaFormDataEntries.approvalStatus
+          approvalStatus: schemaFormDataEntries.approvalStatus,
+          createdBy: schemaFormDataEntries.createdBy,
+          sourceFileName: schemaFormDataEntries.sourceFileName
         })
         .from(schemaFormDataEntries)
         .where(
@@ -1263,13 +1293,33 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
             source: 'upload',
             fileName: body.fileName,
 
-            // Replacement tracking
+            // Creator identity tracking for audit purposes (for replacement)
+            originalCreatedBy: existingPlanning[0].createdBy,
+            replacedBy: userContext.userId,
             replacedAt: new Date().toISOString(),
+            submissionSource: 'file_upload_replacement',
+            // Generate unique identifier for resubmitted plan
+            submissionId: `PLAN_${Date.now()}_${userContext.userId}_REPL`,
+            // Timestamp for resubmitted plan
+            resubmittedAt: new Date().toISOString(),
+
+            // Replacement tracking
             previousStatus: existingPlanning[0].approvalStatus,
             isReplacement: true,
 
             // Parse results
             parseMetadata: parseResult.metadata,
+
+            // Source file tracking for uploaded plans
+            sourceFile: {
+              originalName: body.fileName,
+              uploadedAt: new Date().toISOString(),
+              uploadedBy: userContext.userId,
+              fileSize: body.fileData?.length || 0,
+              contentType: body.fileName.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv',
+              isReplacement: true,
+              previousFileName: existingPlanning[0].sourceFileName
+            },
 
             // Data summary
             dataSummary: {
@@ -1289,7 +1339,9 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
             processingTime: Date.now(), // Will be updated after processing
             version: '1.0'
           },
+          // Update source file tracking for uploaded plans
           sourceFileName: body.fileName,
+          // Set approval status to PENDING for re-uploaded plans
           approvalStatus: 'PENDING',
           updatedBy: userContext.userId,
           updatedAt: new Date(),
@@ -1317,11 +1369,29 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
           source: 'upload',
           fileName: body.fileName,
 
+          // Creator identity tracking for audit purposes
+          createdBy: userContext.userId,
+          createdAt: new Date().toISOString(),
+          submissionSource: 'file_upload',
+          // Generate unique identifier for submitted plan
+          submissionId: `PLAN_${Date.now()}_${userContext.userId}`,
+          // Timestamp for submitted plan
+          submittedAt: new Date().toISOString(),
+
           // Creation tracking
           isReplacement: false,
 
           // Parse results
           parseMetadata: parseResult.metadata,
+
+          // Source file tracking for uploaded plans
+          sourceFile: {
+            originalName: body.fileName,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: userContext.userId,
+            fileSize: body.fileData?.length || 0,
+            contentType: body.fileName.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv'
+          },
 
           // Data summary
           dataSummary: {
@@ -1341,7 +1411,9 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
           processingTime: Date.now(), // Will be updated after processing
           version: '1.0'
         },
+        // Add source file tracking for uploaded plans
         sourceFileName: body.fileName,
+        // Set approval status to PENDING for uploaded plans
         approvalStatus: 'PENDING',
         createdBy: userContext.userId,
         updatedBy: userContext.userId,
@@ -1359,6 +1431,17 @@ export const uploadFile: AppRouteHandler<UploadFileRoute> = async (c) => {
         reportingPeriod: true,
       },
     });
+
+    // Send notification to admins about pending review
+    try {
+      const adminIds = await notificationService.getAdminUsersForNotification();
+      if (adminIds.length > 0) {
+        await notificationService.notifyPendingReview(result.id, adminIds);
+      }
+    } catch (notificationError) {
+      console.error('Failed to send pending review notification:', notificationError);
+      // Don't fail the upload if notification fails
+    }
 
     // Transform warnings and errors into structured format
     const structuredWarnings = (parseResult.warnings || []).map((warning, index) => {
@@ -1648,6 +1731,20 @@ export const submitForApproval: AppRouteHandler<SubmitForApprovalRoute> = async 
       })
       .where(inArray(schemaFormDataEntries.id, body.planningIds));
 
+    // Send notifications to admins about pending reviews
+    try {
+      const adminIds = await notificationService.getAdminUsersForNotification();
+      if (adminIds.length > 0) {
+        // Send notification for each plan submitted
+        for (const planningId of body.planningIds) {
+          await notificationService.notifyPendingReview(planningId, adminIds);
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to send pending review notifications:', notificationError);
+      // Don't fail the submission if notification fails
+    }
+
     return c.json({
       success: true,
       message: `${planningEntries.length} plan(s) submitted for approval`,
@@ -1663,6 +1760,169 @@ export const submitForApproval: AppRouteHandler<SubmitForApprovalRoute> = async 
       },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
     );
+  }
+};
+
+// NEW DEDICATED APPROVAL ENDPOINT HANDLER
+export const approvePlanning: AppRouteHandler<ApprovePlanningRoute> = async (c) => {
+  const logger = c.get('logger');
+  
+  try {
+    const userContext = await getUserContext(c);
+    const body = await c.req.json();
+
+    // Validate input using ApprovalError
+    if (!body.planningId || !body.action) {
+      const error = new ApprovalError(
+        'INVALID_APPROVAL_ACTION',
+        'planningId and action are required',
+        HttpStatusCodes.BAD_REQUEST,
+        {
+          code: 'INVALID_APPROVAL_ACTION',
+          reason: 'Missing required fields: planningId and action'
+        }
+      );
+      
+      logger?.warn({
+        error: error.toJSON(),
+        requestBody: body
+      }, 'Invalid approval request: missing required fields');
+      
+      return c.json(error.toJSON(), error.statusCode as any);
+    }
+
+    if (!['APPROVE', 'REJECT'].includes(body.action)) {
+      const error = ApprovalErrorFactory.invalidApprovalAction(body.action);
+      
+      logger?.warn({
+        error: error.toJSON(),
+        requestBody: body
+      }, 'Invalid approval action provided');
+      
+      return c.json(error.toJSON(), error.statusCode as any);
+    }
+
+    // Check if user has approval permissions
+    const canApprove = hasAdminAccess(userContext.role, userContext.permissions) ||
+      userContext.permissions?.includes('approve_planning');
+
+    if (!canApprove) {
+      const error = ApprovalErrorFactory.insufficientPermissions(
+        userContext.userId,
+        userContext.role,
+        ['admin', 'superadmin']
+      );
+      
+      logger?.warn({
+        error: error.toJSON(),
+        userId: userContext.userId,
+        userRole: userContext.role
+      }, 'User lacks approval permissions');
+      
+      return c.json(error.toJSON(), error.statusCode as any);
+    }
+
+    // Validate comments are required for rejection
+    if (body.action === 'REJECT' && (!body.comments || body.comments.trim().length === 0)) {
+      const error = ApprovalErrorFactory.commentsRequired(body.planningId, 'REJECT');
+      
+      logger?.warn({
+        error: error.toJSON(),
+        planningId: body.planningId,
+        action: body.action
+      }, 'Comments required for rejection');
+      
+      return c.json(error.toJSON(), error.statusCode as any);
+    }
+
+    // Log approval attempt for audit purposes
+    logger?.info({
+      planningId: body.planningId,
+      action: body.action,
+      userId: userContext.userId,
+      userRole: userContext.role,
+      hasComments: !!body.comments
+    }, 'Processing approval request');
+
+    // Use approval service to process the request
+    let result;
+    if (body.action === 'APPROVE') {
+      result = await approvalService.approvePlan(
+        body.planningId,
+        userContext.userId,
+        body.comments
+      );
+    } else {
+      result = await approvalService.rejectPlan(
+        body.planningId,
+        userContext.userId,
+        body.comments || ''
+      );
+    }
+
+    // Log the approval action to audit trail
+    try {
+      const previousStatus = result.success ? 'PENDING' : 'UNKNOWN';
+      const newStatus = body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      
+      await auditService.logApprovalAction(
+        body.planningId,
+        previousStatus as any,
+        newStatus as any,
+        userContext.userId,
+        body.comments
+      );
+      
+      logger?.info({
+        planningId: body.planningId,
+        action: body.action,
+        previousStatus,
+        newStatus,
+        userId: userContext.userId
+      }, 'Audit log created for approval action');
+      
+    } catch (auditError) {
+      logger?.error({
+        planningId: body.planningId,
+        action: body.action,
+        auditError: auditError instanceof Error ? auditError.message : 'Unknown error'
+      }, 'Failed to log audit action');
+      // Don't fail the request if audit logging fails
+    }
+
+    // Log successful approval
+    logger?.info({
+      planningId: body.planningId,
+      action: body.action,
+      success: result.success,
+      newStatus: result.record.approvalStatus
+    }, 'Approval request processed successfully');
+
+    return c.json(result, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    // Handle ApprovalError specifically
+    if (isApprovalError(error)) {
+      logger?.error({
+        error: error.toJSON(),
+        planningId: error.planningId
+      }, 'Approval request failed with ApprovalError');
+      
+      return c.json(error.toJSON(), error.statusCode as any);
+    }
+
+    // Handle unexpected errors
+    logger?.error({
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      requestBody: await c.req.json().catch(() => ({}))
+    }, 'Unexpected error in approval endpoint');
+
+    const validationError = ApprovalErrorFactory.validationError(
+      `Failed to process approval request: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+
+    return c.json(validationError.toJSON(), validationError.statusCode as any);
   }
 };
 
@@ -1759,11 +2019,49 @@ export const reviewPlanning: AppRouteHandler<ReviewPlanningRoute> = async (c) =>
   }
 };
 
-// BULK REVIEW HANDLER
+// ENHANCED BULK REVIEW HANDLER
 export const bulkReviewPlanning: AppRouteHandler<BulkReviewPlanningRoute> = async (c) => {
   try {
     const userContext = await getUserContext(c);
     const body = await c.req.json();
+
+    // Enhanced input validation
+    if (!body.planningIds || !Array.isArray(body.planningIds) || body.planningIds.length === 0) {
+      return c.json(
+        {
+          success: false,
+          message: "planningIds must be a non-empty array",
+          updatedCount: 0,
+          results: []
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    if (!['APPROVE', 'REJECT'].includes(body.action)) {
+      return c.json(
+        {
+          success: false,
+          message: "action must be either 'APPROVE' or 'REJECT'",
+          updatedCount: 0,
+          results: []
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    // Validate comments are required for rejection
+    if (body.action === 'REJECT' && (!body.comments || body.comments.trim().length === 0)) {
+      return c.json(
+        {
+          success: false,
+          message: "Comments are required when rejecting plans",
+          updatedCount: 0,
+          results: []
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
 
     // Check permissions
     const canReview = hasAdminAccess(userContext.role, userContext.permissions) ||
@@ -1773,7 +2071,7 @@ export const bulkReviewPlanning: AppRouteHandler<BulkReviewPlanningRoute> = asyn
       return c.json(
         {
           success: false,
-          message: "Insufficient permissions",
+          message: "Insufficient permissions to approve/reject planning",
           updatedCount: 0,
           results: []
         },
@@ -1781,63 +2079,136 @@ export const bulkReviewPlanning: AppRouteHandler<BulkReviewPlanningRoute> = asyn
       );
     }
 
-    const newStatus = body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    const results: Array<{ planningId: number; success: boolean; error?: string }> = [];
-    let updatedCount = 0;
+    // Pre-validate all plans before processing any
+    const planningEntries = await db.query.schemaFormDataEntries.findMany({
+      where: and(
+        inArray(schemaFormDataEntries.id, body.planningIds),
+        eq(schemaFormDataEntries.entityType, 'planning')
+      ),
+    });
 
-    for (const planningId of body.planningIds) {
-      try {
-        const planning = await db.query.schemaFormDataEntries.findFirst({
-          where: and(
-            eq(schemaFormDataEntries.id, planningId),
-            eq(schemaFormDataEntries.entityType, 'planning')
-          ),
-        });
-
-        if (!planning) {
-          results.push({ planningId, success: false, error: 'Not found' });
-          continue;
-        }
-
-        if (planning.approvalStatus !== 'PENDING') {
-          results.push({
-            planningId,
-            success: false,
-            error: `Cannot review ${planning.approvalStatus} plan`
-          });
-          continue;
-        }
-
-        await db.update(schemaFormDataEntries)
-          .set({
-            approvalStatus: newStatus,
-            reviewedBy: userContext.userId,
-            reviewedAt: new Date(),
-            reviewComments: body.comments || null,
-            updatedBy: userContext.userId,
-            updatedAt: new Date(),
-          })
-          .where(eq(schemaFormDataEntries.id, planningId));
-
-        results.push({ planningId, success: true });
-        updatedCount++;
-      } catch (error: any) {
-        results.push({ planningId, success: false, error: error.message });
-      }
+    // Check for missing plans
+    const foundIds = planningEntries.map(p => p.id);
+    const missingIds = body.planningIds.filter((id: number) => !foundIds.includes(id));
+    
+    if (missingIds.length > 0) {
+      return c.json(
+        {
+          success: false,
+          message: `Plans not found: ${missingIds.join(', ')}`,
+          updatedCount: 0,
+          results: missingIds.map((id: number) => ({ planningId: id, success: false, error: 'Not found' }))
+        },
+        HttpStatusCodes.NOT_FOUND
+      );
     }
 
-    return c.json({
-      success: true,
-      message: `${updatedCount} plan(s) ${newStatus.toLowerCase()} successfully`,
-      updatedCount,
-      results
-    });
+    // Check for plans not in PENDING status
+    const invalidStatusPlans = planningEntries.filter(p => p.approvalStatus !== 'PENDING');
+    
+    if (invalidStatusPlans.length > 0) {
+      return c.json(
+        {
+          success: false,
+          message: `Some plans cannot be reviewed due to invalid status`,
+          updatedCount: 0,
+          results: invalidStatusPlans.map((p: any) => ({
+            planningId: p.id,
+            success: false,
+            error: `Cannot review ${p.approvalStatus} plan`
+          }))
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    // Process all plans using approval service with transaction rollback
+    const results: Array<{ planningId: number; success: boolean; error?: string }> = [];
+    let updatedCount = 0;
+    const successfulUpdates: number[] = [];
+
+    try {
+      // Use database transaction for atomic operations
+      await db.transaction(async () => {
+        for (const planningId of body.planningIds) {
+          try {
+            let result;
+            if (body.action === 'APPROVE') {
+              result = await approvalService.approvePlan(
+                planningId,
+                userContext.userId,
+                body.comments
+              );
+            } else {
+              result = await approvalService.rejectPlan(
+                planningId,
+                userContext.userId,
+                body.comments || ''
+              );
+            }
+
+            if (result.success) {
+              // Log audit action
+              try {
+                await auditService.logApprovalAction(
+                  planningId,
+                  'PENDING' as any,
+                  (body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED') as any,
+                  userContext.userId,
+                  body.comments
+                );
+              } catch (auditError) {
+                console.error('Failed to log audit action for bulk operation:', auditError);
+                // Don't fail the transaction for audit logging errors
+              }
+
+              results.push({ planningId, success: true });
+              successfulUpdates.push(planningId);
+              updatedCount++;
+            } else {
+              results.push({ planningId, success: false, error: result.message });
+              // If any operation fails, rollback the transaction
+              throw new Error(`Failed to process plan ${planningId}: ${result.message}`);
+            }
+          } catch (error: any) {
+            results.push({ planningId, success: false, error: error.message });
+            throw error; // Rollback transaction
+          }
+        }
+      });
+
+      return c.json({
+        success: true,
+        message: `${updatedCount} plan(s) ${body.action.toLowerCase()}d successfully`,
+        updatedCount,
+        results
+      });
+
+    } catch (transactionError: any) {
+      console.error('Bulk review transaction failed:', transactionError);
+      
+      // Return partial results with rollback information
+      return c.json(
+        {
+          success: false,
+          message: "Bulk operation failed and was rolled back",
+          updatedCount: 0,
+          results: body.planningIds.map((id: number) => ({
+            planningId: id,
+            success: false,
+            error: "Transaction rolled back due to failure"
+          }))
+        },
+        HttpStatusCodes.INTERNAL_SERVER_ERROR
+      );
+    }
+
   } catch (error: any) {
     console.error('Bulk review error:', error);
     return c.json(
       {
         success: false,
-        message: "Failed to bulk review",
+        message: "Failed to process bulk review request",
         updatedCount: 0,
         results: []
       },
@@ -1891,10 +2262,26 @@ export const getApprovalHistory: AppRouteHandler<GetApprovalHistoryRoute> = asyn
 
     // Add current review state if reviewed
     if (planning.reviewedBy && planning.reviewedAt) {
-      // TODO: Fetch reviewer details if needed
+      // Fetch reviewer details
+      let reviewerName = 'Unknown Reviewer';
+      try {
+        const reviewer = await db.query.users.findFirst({
+          where: eq(users.id, planning.reviewedBy),
+          columns: { name: true }
+        });
+        if (reviewer) {
+          reviewerName = reviewer.name;
+        }
+      } catch (reviewerError) {
+        console.error('Failed to fetch reviewer details:', reviewerError);
+      }
+
       history.push({
         status: planning.approvalStatus,
-        reviewedBy: { id: planning.reviewedBy }, // Just include the ID for now
+        reviewedBy: { 
+          id: planning.reviewedBy, 
+          name: reviewerName 
+        },
         reviewedAt: planning.reviewedAt.toISOString(),
         comments: planning.reviewComments
       });

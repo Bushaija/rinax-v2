@@ -55,28 +55,21 @@ const hivActivities: ActivityData[] = [
     // B. Expenditures - Human Resources + BONUS (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Laboratory Technician', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Nurse', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Medical Doctor', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'CHW Supervisor', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Monitoring & Evaluation (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Supervision CHWs', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Support group meetings', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Hospital HIV Testing Campaign', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Health Center Testing Activities', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Living Support to Clients (both but different scale)
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Sample transport', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Home visit lost to follow up', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Community outreach activities', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Overheads (facility-specific variations)
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Hospital Equipment Maintenance', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Health Center Communication Costs', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -89,17 +82,21 @@ const hivActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'Petty cash', displayOrder: 2, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Receivables (VAT refund)', displayOrder: 3, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Other Receivables', displayOrder: 4, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
-    // { categoryCode: 'D', subCategoryCode: null, name: 'Health Center Advance Payments', displayOrder: 5, isTotalRow: false, activityType: 'ASSET', applicableTo: 'health_center' },
     { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 5, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'Salaries on borrowed funds (BONUS)', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Maintenance & Repairs', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Office suppliers', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Transportation fees', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'VAT refund to RBC', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    // { categoryCode: 'E', subCategoryCode: null, name: 'Health Center Service Payables', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'health_center' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 6, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
 
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
@@ -121,28 +118,21 @@ const malariaActivities: ActivityData[] = [
     // B. Expenditures - Human Resources + BONUS (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Laboratory Technician', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Nurse', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Medical Doctor', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'CHW Supervisor', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Monitoring & Evaluation (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Supervision CHWs', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Support group meetings', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Hospital HIV Testing Campaign', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Health Center Testing Activities', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Living Support to Clients (both but different scale)
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Sample transport', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Home visit lost to follow up', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Community outreach activities', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Overheads (facility-specific variations)
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Hospital Equipment Maintenance', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Health Center Communication Costs', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -155,18 +145,22 @@ const malariaActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'Petty cash', displayOrder: 2, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Receivables (VAT refund)', displayOrder: 3, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Other Receivables', displayOrder: 4, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
-    // { categoryCode: 'D', subCategoryCode: null, name: 'Health Center Advance Payments', displayOrder: 5, isTotalRow: false, activityType: 'ASSET', applicableTo: 'health_center' },
     { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 6, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'Salaries on borrowed funds (BONUS)', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Maintenance & Repairs', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Office suppliers', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Transportation fees', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'VAT refund to RBC', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    // { categoryCode: 'E', subCategoryCode: null, name: 'Health Center Service Payables', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'health_center' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 6, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
-
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+    
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
 
@@ -187,28 +181,21 @@ const tbActivities: ActivityData[] = [
     // B. Expenditures - Human Resources + BONUS (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Laboratory Technician', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Nurse', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'Medical Doctor', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-01', name: 'CHW Supervisor', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Monitoring & Evaluation (facility-specific)
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Supervision CHWs', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Support group meetings', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Hospital HIV Testing Campaign', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-02', name: 'Health Center Testing Activities', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Living Support to Clients (both but different scale)
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Sample transport', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Home visit lost to follow up', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Community outreach activities', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Overheads (facility-specific variations)
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Hospital Equipment Maintenance', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'hospital' },
-    // { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Health Center Communication Costs', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'health_center' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -221,18 +208,22 @@ const tbActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'Petty cash', displayOrder: 2, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Receivables (VAT refund)', displayOrder: 3, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Other Receivables', displayOrder: 4, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
-    // { categoryCode: 'D', subCategoryCode: null, name: 'Health Center Advance Payments', displayOrder: 5, isTotalRow: false, activityType: 'ASSET', applicableTo: 'health_center' },
     { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 6, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'Salaries on borrowed funds (BONUS)', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Maintenance & Repairs', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Office suppliers', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'Payable - Transportation fees', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'VAT refund to RBC', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    // { categoryCode: 'E', subCategoryCode: null, name: 'Health Center Service Payables', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'health_center' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 6, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
-
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+    
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
 

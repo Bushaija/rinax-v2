@@ -1,9 +1,9 @@
 import { relations } from "drizzle-orm/relations";
-import { 
+import {
   // Enhanced core tables
   projects,
   users,
-  
+
   // New schema-driven tables
   formSchemas,
   formFields,
@@ -15,7 +15,8 @@ import {
   schemaFormDataEntries,
   systemConfigurations,
   configurationAuditLog,
-  
+  approvalAuditLog,
+
   // Existing tables (referenced)
   facilities,
   reportingPeriods,
@@ -65,6 +66,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   approvedReports: many(financialReports, { relationName: "report_approver" }),
   formDataEntries: many(schemaFormDataEntries, { relationName: "form_data_creator" }),
   auditLogs: many(configurationAuditLog),
+  approvalActions: many(approvalAuditLog, { relationName: "approval_action_by" }),
+  reviewedPlans: many(schemaFormDataEntries, { relationName: "plan_reviewer" }),
 }));
 
 // === SCHEMA-DRIVEN RELATIONS ===
@@ -181,7 +184,7 @@ export const financialReportsRelations = relations(financialReports, ({ one }) =
   }),
 }));
 
-export const schemaFormDataEntriesRelations = relations(schemaFormDataEntries, ({ one }) => ({
+export const schemaFormDataEntriesRelations = relations(schemaFormDataEntries, ({ one, many }) => ({
   schema: one(formSchemas, {
     fields: [schemaFormDataEntries.schemaId],
     references: [formSchemas.id]
@@ -207,6 +210,12 @@ export const schemaFormDataEntriesRelations = relations(schemaFormDataEntries, (
     fields: [schemaFormDataEntries.updatedBy],
     references: [users.id]
   }),
+  reviewer: one(users, {
+    fields: [schemaFormDataEntries.reviewedBy],
+    references: [users.id],
+    relationName: "plan_reviewer"
+  }),
+  approvalHistory: many(approvalAuditLog, { relationName: "plan_approval_history" }),
 }));
 
 export const systemConfigurationsRelations = relations(systemConfigurations, ({ one }) => ({
@@ -234,7 +243,6 @@ export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
     fields: [facilities.districtId],
     references: [districts.id]
   }),
-  // Updated to use new schema-driven tables
   formDataEntries: many(schemaFormDataEntries),
   projects: many(projects),
   users: many(users),
@@ -276,5 +284,18 @@ export const sessionRelations = relations(session, ({ one }) => ({
   user: one(users, {
     fields: [session.userId],
     references: [users.id]
+  }),
+}));
+
+export const approvalAuditLogRelations = relations(approvalAuditLog, ({ one }) => ({
+  plan: one(schemaFormDataEntries, {
+    fields: [approvalAuditLog.planningId],
+    references: [schemaFormDataEntries.id],
+    relationName: "plan_approval_history"
+  }),
+  actionByUser: one(users, {
+    fields: [approvalAuditLog.actionBy],
+    references: [users.id],
+    relationName: "approval_action_by"
   }),
 }));

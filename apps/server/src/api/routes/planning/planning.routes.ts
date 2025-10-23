@@ -29,7 +29,7 @@ export const list = createRoute({
   responses: {
     [HttpStatusCodes.OK]: jsonContent(
       z.object({
-        data: z.array(z.any()), // Use your selectPlanningDataSchema here
+        data: z.array(selectPlanningDataSchema),
         pagination: z.object({
           page: z.string(),
           limit: z.string(),
@@ -40,6 +40,7 @@ export const list = createRoute({
           facilityType: z.string().optional(),
           projectType: z.string().optional(),
           reportingPeriod: z.string().optional(),
+          approvalStatus: z.string().optional(),
         }).optional(),
       }),
       "List of planning data entries with applied filters"
@@ -467,6 +468,62 @@ export const bulkReviewPlanning = createRoute({
   },
 });
 
+// APPROVE/REJECT PLANNING - NEW DEDICATED ENDPOINT
+export const approvePlanning = createRoute({
+  path: "/planning/approve",
+  method: "post",
+  tags,
+  request: {
+    body: jsonContentRequired(
+      z.object({
+        planningId: z.number().int(),
+        action: z.enum(['APPROVE', 'REJECT']),
+        comments: z.string().optional(),
+      }),
+      "Approval action for planning"
+    ),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string(),
+        record: z.object({
+          id: z.number(),
+          approvalStatus: z.string(),
+          reviewedBy: z.number().nullable(),
+          reviewedByName: z.string().nullable(),
+          reviewedAt: z.string().nullable(),
+          reviewComments: z.string().nullable(),
+        }),
+      }),
+      "Planning approval result"
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string(),
+        code: z.string().optional(),
+      }),
+      "Validation error or invalid request"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string(),
+      }),
+      "Insufficient permissions"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string(),
+      }),
+      "Planning not found"
+    ),
+  },
+});
+
 // GET APPROVAL HISTORY
 export const getApprovalHistory = createRoute({
   path: "/planning/{id}/approval-history",
@@ -514,4 +571,5 @@ export type DownloadTemplateRoute = typeof downloadTemplate;
 export type SubmitForApprovalRoute = typeof submitForApproval;
 export type ReviewPlanningRoute = typeof reviewPlanning;
 export type BulkReviewPlanningRoute = typeof bulkReviewPlanning;
+export type ApprovePlanningRoute = typeof approvePlanning;
 export type GetApprovalHistoryRoute = typeof getApprovalHistory;

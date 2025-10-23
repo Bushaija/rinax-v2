@@ -1,4 +1,5 @@
 export * from "./account/schema";
+export * from "./approval-audit-log/schema";
 export * from "./configurable-event-mappings/schema";
 export * from "./configuration-audit-log/schema"
 export * from "./districts/schema"

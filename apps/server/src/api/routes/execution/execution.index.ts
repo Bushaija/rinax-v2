@@ -11,6 +11,7 @@ const router = createRouter()
   // .openapi(routes.compiledExport, handlers.compiledExport)
   .openapi(routes.list, handlers.list)
   .openapi(routes.getOne, handlers.getOne)
+  // Note: create and update handlers already include approval validation logic
   .openapi(routes.create, handlers.create)
   .openapi(routes.update, handlers.update)
   .openapi(routes.remove, handlers.remove)

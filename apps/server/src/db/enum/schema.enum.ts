@@ -76,9 +76,9 @@ export const eventType = pgEnum("event_type", [
 ]);
 
 export const approvalStatus = pgEnum("approval_status", [
-    'PENDING',
-    'APPROVED',
-    'REJECTED',
-    'DRAFT'
+    "PENDING",
+    "APPROVED",
+    "REJECTED",
+    "DRAFT"
 ]);
 

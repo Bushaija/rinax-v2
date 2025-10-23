@@ -2,7 +2,7 @@ import { eq, and, sql } from "drizzle-orm";
 import * as HttpStatusCodes from "stoker/http-status-codes";
 
 import { db } from "@/api/db";
-import { schemaFormDataEntries, dynamicActivities, schemaActivityCategories, formSchemas, facilities, projects, reportingPeriods, users } from "@/api/db/schema";
+import { schemaFormDataEntries, dynamicActivities, schemaActivityCategories, formSchemas, facilities, projects, reportingPeriods } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 import { getUserContext, canAccessFacility, hasAdminAccess } from "@/api/lib/utils/get-user-facility";
 import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
@@ -26,8 +26,110 @@ import type {
   CompiledRoute,
 } from "./execution.routes";
 import { BalancesResponse, executionListQuerySchema, compiledExecutionQuerySchema, type CompiledExecutionResponse, type FacilityColumn, type ActivityRow, type SectionSummary, type FacilityTotals, type AppliedFilters } from "./execution.types";
-import { enrichFormData, toBalances, parseCode, toKeyedActivities, calculateCumulativeBalance } from "./execution.helpers";
-import { mergeQuarterData, recalculateExecutionData, validateRecalculation } from "./execution.recalculations";
+import { toBalances, parseCode, calculateCumulativeBalance } from "./execution.helpers";
+import { recalculateExecutionData, validateRecalculation } from "./execution.recalculations";
+import { ApprovalError, ApprovalErrorFactory, isApprovalError } from "@/lib/errors/approval.errors";
+import { ExecutionErrorHandler } from "@/lib/utils/execution-error-handler";
+
+/**
+ * Helper function to validate that there's an approved plan for execution
+ * @param facilityId - The facility ID
+ * @param projectId - The project ID  
+ * @param reportingPeriodId - The reporting period ID
+ * @param logger - Logger instance for audit logging
+ * @returns Promise with validation result
+ * @throws ApprovalError for validation failures
+ */
+async function validateApprovedPlanExists(
+  facilityId: number, 
+  projectId: number, 
+  reportingPeriodId: number,
+  logger?: any
+): Promise<{ allowed: boolean; reason?: string; planningId?: number }> {
+  try {
+    // Find the planning entry for the same facility/project/reporting period
+    const planningEntry = await db.query.schemaFormDataEntries.findFirst({
+      where: and(
+        eq(schemaFormDataEntries.facilityId, facilityId),
+        eq(schemaFormDataEntries.projectId, projectId),
+        eq(schemaFormDataEntries.reportingPeriodId, reportingPeriodId),
+        eq(schemaFormDataEntries.entityType, 'planning')
+      ),
+    });
+
+    if (!planningEntry) {
+      logger?.warn({
+        facilityId,
+        projectId,
+        reportingPeriodId,
+        entityType: 'planning'
+      }, 'No planning data found for execution validation');
+
+      throw new ApprovalError(
+        'PLAN_NOT_FOUND',
+        'No planning data found for this facility, project, and reporting period',
+        404,
+        {
+          code: 'PLAN_NOT_FOUND',
+          reason: 'A plan must be created and approved before execution can proceed',
+          context: {
+            facilityId,
+            projectId,
+            reportingPeriodId,
+            entityType: 'planning'
+          }
+        }
+      );
+    }
+
+    if (planningEntry.approvalStatus !== 'APPROVED') {
+      logger?.warn({
+        planningId: planningEntry.id,
+        currentStatus: planningEntry.approvalStatus,
+        facilityId,
+        projectId,
+        reportingPeriodId
+      }, 'Planning data not approved for execution');
+
+      throw ApprovalErrorFactory.executionBlocked(
+        planningEntry.id,
+        planningEntry.approvalStatus || 'UNKNOWN',
+        `Planning data has not been approved for execution. Current status: ${planningEntry.approvalStatus}. Only approved plans can proceed to execution.`
+      );
+    }
+
+    logger?.info({
+      planningId: planningEntry.id,
+      approvalStatus: planningEntry.approvalStatus,
+      facilityId,
+      projectId,
+      reportingPeriodId
+    }, 'Planning data validation successful - execution allowed');
+
+    return {
+      allowed: true,
+      planningId: planningEntry.id
+    };
+
+  } catch (error) {
+    // Re-throw ApprovalErrors as-is
+    if (isApprovalError(error)) {
+      throw error;
+    }
+
+    // Wrap other errors in ApprovalError
+    logger?.error({
+      facilityId,
+      projectId,
+      reportingPeriodId,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 'Error validating approved plan');
+
+    throw ApprovalErrorFactory.validationError(
+      `Failed to validate plan approval: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
 
 
 export const list: AppRouteHandler<ListRoute> = async (c) => {
@@ -576,6 +678,62 @@ export const create: AppRouteHandler<CreateRoute> = async (c) => {
       );
     }
 
+    // Validate that there's an approved plan before allowing execution
+    try {
+      const logger = c.get('logger');
+      const approvalValidation = await validateApprovedPlanExists(
+        validatedFacilityId,
+        body.projectId,
+        body.reportingPeriodId,
+        logger
+      );
+
+      // Log successful validation for audit purposes
+      ExecutionErrorHandler.logExecutionAttempt(
+        c,
+        approvalValidation.planningId!,
+        true,
+        undefined,
+        {
+          facilityId: validatedFacilityId,
+          projectId: body.projectId,
+          reportingPeriodId: body.reportingPeriodId,
+          operation: 'create_execution'
+        }
+      );
+
+    } catch (error) {
+      // Handle approval validation errors
+      if (isApprovalError(error)) {
+        // Log blocked execution attempt
+        ExecutionErrorHandler.logExecutionAttempt(
+          c,
+          error.planningId || 0,
+          false,
+          error.message,
+          {
+            facilityId: validatedFacilityId,
+            projectId: body.projectId,
+            reportingPeriodId: body.reportingPeriodId,
+            operation: 'create_execution',
+            errorCode: error.code
+          }
+        );
+
+        const errorResponse = ExecutionErrorHandler.formatErrorResponse(error, {
+          facilityId: validatedFacilityId,
+          projectId: body.projectId,
+          reportingPeriodId: body.reportingPeriodId,
+          operation: 'create_execution'
+        });
+
+        return c.json(errorResponse, error.statusCode as any);
+      }
+
+      // Handle unexpected errors
+      throw ExecutionErrorHandler.handleExecutionError(c, error, undefined, 'create_execution');
+    }
+
     // Check if execution already exists for this facility/project/reporting period/quarter
     const existingExecution = await db.query.schemaFormDataEntries.findFirst({
       where: and(
@@ -879,6 +1037,69 @@ export const update: AppRouteHandler<UpdateRoute> = async (c) => {
           );
         }
       }
+    }
+
+    // Validate that there's still an approved plan for execution updates
+    const facilityIdToCheck = body.facilityId !== undefined ? body.facilityId : existing.facilityId;
+    const projectIdToCheck = body.projectId !== undefined ? body.projectId : existing.projectId;
+    const reportingPeriodIdToCheck = body.reportingPeriodId !== undefined ? body.reportingPeriodId : existing.reportingPeriodId;
+
+    try {
+      const logger = c.get('logger');
+      const approvalValidation = await validateApprovedPlanExists(
+        facilityIdToCheck,
+        projectIdToCheck,
+        reportingPeriodIdToCheck,
+        logger
+      );
+
+      // Log successful validation for audit purposes
+      ExecutionErrorHandler.logExecutionAttempt(
+        c,
+        approvalValidation.planningId!,
+        true,
+        undefined,
+        {
+          facilityId: facilityIdToCheck,
+          projectId: projectIdToCheck,
+          reportingPeriodId: reportingPeriodIdToCheck,
+          operation: 'update_execution',
+          executionId: id
+        }
+      );
+
+    } catch (error) {
+      // Handle approval validation errors
+      if (isApprovalError(error)) {
+        // Log blocked execution attempt
+        ExecutionErrorHandler.logExecutionAttempt(
+          c,
+          error.planningId || 0,
+          false,
+          error.message,
+          {
+            facilityId: facilityIdToCheck,
+            projectId: projectIdToCheck,
+            reportingPeriodId: reportingPeriodIdToCheck,
+            operation: 'update_execution',
+            executionId: id,
+            errorCode: error.code
+          }
+        );
+
+        const errorResponse = ExecutionErrorHandler.formatErrorResponse(error, {
+          facilityId: facilityIdToCheck,
+          projectId: projectIdToCheck,
+          reportingPeriodId: reportingPeriodIdToCheck,
+          operation: 'update_execution',
+          executionId: id
+        });
+
+        return c.json(errorResponse, error.statusCode as any);
+      }
+
+      // Handle unexpected errors
+      throw ExecutionErrorHandler.handleExecutionError(c, error, undefined, 'update_execution');
     }
 
     // ============================================================================

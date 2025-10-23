@@ -33,7 +33,7 @@ export const schemaFormDataEntries = pgTable("schema_form_data_entries", {
   metadata: jsonb("metadata"),
 
   // NEW; Approval workflow
-  approvalStatus: approvalStatus().default('PENDING'), // PENDING | APPROVED | REJECTED
+  approvalStatus: approvalStatus("approval_status").default('PENDING'), // PENDING | APPROVED | REJECTED
   reviewedBy: integer("reviewed_by"), // user ID of the planner
   reviewedAt: timestamp("reviewed_at", { mode: 'date' }),
   reviewComments: text("review_comments"),
