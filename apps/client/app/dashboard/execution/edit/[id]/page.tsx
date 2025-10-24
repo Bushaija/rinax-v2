@@ -101,6 +101,9 @@ export default function EditExecutionPage() {
             q3: toNumber(item.q3),
             q4: toNumber(item.q4),
             comment: String(item.comment || ""),
+            // Include payment tracking data
+            paymentStatus: item.paymentStatus || "unpaid",
+            amountPaid: toNumber(item.amountPaid),
           };
         }
       });
@@ -112,12 +115,24 @@ export default function EditExecutionPage() {
         if (group.items) {
           group.items.forEach((item: any) => {
             if (item.code) {
+              // Debug: Log raw item data from backend
+              console.log('🔍 [Edit Page] Raw Section B item from backend:', {
+                code: item.code,
+                q1: item.q1,
+                paymentStatus: item.paymentStatus,
+                amountPaid: item.amountPaid,
+                fullItem: item,
+              });
+              
               mapped[item.code] = {
                 q1: toNumber(item.q1),
                 q2: toNumber(item.q2),
                 q3: toNumber(item.q3),
                 q4: toNumber(item.q4),
                 comment: String(item.comment || ""),
+                // Include payment tracking data
+                paymentStatus: item.paymentStatus || "unpaid",
+                amountPaid: toNumber(item.amountPaid),
               };
             }
           });
@@ -135,6 +150,9 @@ export default function EditExecutionPage() {
             q3: toNumber(item.q3),
             q4: toNumber(item.q4),
             comment: String(item.comment || ""),
+            // Include payment tracking data
+            paymentStatus: item.paymentStatus || "unpaid",
+            amountPaid: toNumber(item.amountPaid),
           };
         }
       });
@@ -150,6 +168,9 @@ export default function EditExecutionPage() {
             q3: toNumber(item.q3),
             q4: toNumber(item.q4),
             comment: String(item.comment || ""),
+            // Include payment tracking data
+            paymentStatus: item.paymentStatus || "unpaid",
+            amountPaid: toNumber(item.amountPaid),
           };
         }
       });
@@ -165,10 +186,27 @@ export default function EditExecutionPage() {
             q3: toNumber(item.q3),
             q4: toNumber(item.q4),
             comment: String(item.comment || ""),
+            // Include payment tracking data
+            paymentStatus: item.paymentStatus || "unpaid",
+            amountPaid: toNumber(item.amountPaid),
           };
         }
       });
     }
+
+    // Debug: Log payment tracking data
+    const sectionBExpenses = Object.entries(mapped)
+      .filter(([code]) => code.includes('_B_'))
+      .map(([code, data]) => ({
+        code,
+        paymentStatus: data?.paymentStatus,
+        amountPaid: data?.amountPaid,
+      }));
+    
+    console.log('🔍 [Edit Page] initialData Section B Payment Status:', {
+      totalExpenses: sectionBExpenses.length,
+      sampleExpenses: sectionBExpenses.slice(0, 5),
+    });
 
     return mapped;
   }, [executionResponse])

@@ -129,6 +129,9 @@ export function ExecutionDetailsView({ executionId, onBack, onEdit }: ExecutionD
         q3: toNumber(activity.q3),
         q4: toNumber(activity.q4),
         comment: String(activity.comment || ""),
+        // Include payment tracking data
+        paymentStatus: activity.paymentStatus || "unpaid",
+        amountPaid: toNumber(activity.amountPaid),
       };
       return acc;
     }, {});

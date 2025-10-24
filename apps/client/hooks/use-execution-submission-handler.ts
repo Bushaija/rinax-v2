@@ -24,6 +24,8 @@ interface SubmissionData {
     q3: number;
     q4: number;
     comment: string;
+    paymentStatus?: "paid" | "unpaid" | "partial";
+    amountPaid?: number;
   }>;
   programName?: string;
 }

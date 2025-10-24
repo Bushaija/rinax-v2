@@ -18,6 +18,8 @@ interface SmartExecutionSubmissionParams {
       q3: number;
       q4: number;
       comment: string;
+      paymentStatus?: "paid" | "unpaid" | "partial";
+      amountPaid?: number;
     }>;
     quarter: "Q1" | "Q2" | "Q3" | "Q4";
   };
@@ -107,6 +109,13 @@ export function useSmartExecutionSubmission(options?: UseSmartExecutionSubmissio
               mergedActivity.comment = newActivity.comment;
             }
             
+            // Always update payment tracking data if provided
+            if ((newActivity as any).paymentStatus !== undefined) {
+              mergedActivity.paymentStatus = (newActivity as any).paymentStatus;
+            }
+            if ((newActivity as any).amountPaid !== undefined) {
+              mergedActivity.amountPaid = (newActivity as any).amountPaid;
+            }
             
             return mergedActivity;
           }

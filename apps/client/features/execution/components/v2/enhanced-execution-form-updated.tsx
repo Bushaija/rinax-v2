@@ -103,6 +103,9 @@ export function EnhancedExecutionFormUpdated({
         q3: Number(v?.q3) || 0,
         q4: Number(v?.q4) || 0,
         comment: typeof v?.comment === "string" ? v.comment : "",
+        // Include payment tracking data
+        paymentStatus: v?.paymentStatus || "unpaid",
+        amountPaid: Number(v?.amountPaid) || 0,
       }))
       // Drop totals/computed placeholders if they carry no data
       .filter(a => (a.q1 + a.q2 + a.q3 + a.q4) !== 0 || (a.comment ?? "").trim().length > 0);
@@ -212,6 +215,7 @@ export function EnhancedExecutionFormUpdated({
       computedValues: form.computedValues,
       onFieldChange: isReadOnly ? () => {} : form.onFieldChange,
       onCommentChange: isReadOnly ? () => {} : form.onCommentChange,
+      updateExpensePayment: isReadOnly ? () => {} : form.updateExpensePayment,
       validationErrors: form.validationErrors,
       isCalculating: form.status.isCalculating,
       isValidating: form.status.isValidating,

@@ -20,12 +20,16 @@ interface UseExecutionFormParams {
   executionId?: number;
 }
 
+type PaymentStatus = "paid" | "unpaid" | "partial";
+
 interface ActivityQuarterValues {
   q1: number;
   q2: number;
   q3: number;
   q4: number;
   comment?: string;
+  paymentStatus?: PaymentStatus;
+  amountPaid?: number;
 }
 
 export function useExecutionForm({
@@ -61,6 +65,7 @@ export function useExecutionForm({
   });
 
   // Initialize activity entries when schema+activities are ready (once per project/facility change)
+  console.log("execution activities::", activitiesQuery.data)
   const initKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activitiesQuery.data) return;
@@ -114,7 +119,19 @@ export function useExecutionForm({
         q3: toNumber(existing?.q3),
         q4: toNumber(existing?.q4),
         comment: String(existing?.comment || ""),
+        paymentStatus: existing?.paymentStatus ?? "unpaid",
+        amountPaid: existing?.amountPaid ?? 0,
       };
+
+      // Debug: Log payment tracking data for Section B expenses
+      if (a.code.includes('_B_')) {
+        console.log('🔍 [useExecutionForm] Initializing Section B expense:', {
+          code: a.code,
+          existingData: existing,
+          initializedData: acc[a.code],
+        });
+      }
+
       return acc;
     }, {});
 
@@ -206,6 +223,8 @@ export function useExecutionForm({
             q3: prev[activityCode]?.q3 ?? 0,
             q4: prev[activityCode]?.q4 ?? 0,
             comment: prev[activityCode]?.comment ?? "",
+            paymentStatus: prev[activityCode]?.paymentStatus,
+            amountPaid: prev[activityCode]?.amountPaid,
           },
         };
         (next[activityCode] as any)[quarterKey] = value;
@@ -228,12 +247,38 @@ export function useExecutionForm({
             q3: prev[activityCode]?.q3 ?? 0,
             q4: prev[activityCode]?.q4 ?? 0,
             comment,
+            paymentStatus: prev[activityCode]?.paymentStatus,
+            amountPaid: prev[activityCode]?.amountPaid,
           },
         };
         onDataChange?.(next);
         return next;
       });
       form.setValue(`${activityCode}.comment`, comment, { shouldDirty: true });
+    },
+    [form, onDataChange]
+  );
+
+  const updateExpensePayment = useCallback(
+    (activityCode: string, status: PaymentStatus, amountPaid: number) => {
+      setFormData(prev => {
+        const next = {
+          ...prev,
+          [activityCode]: {
+            q1: prev[activityCode]?.q1 ?? 0,
+            q2: prev[activityCode]?.q2 ?? 0,
+            q3: prev[activityCode]?.q3 ?? 0,
+            q4: prev[activityCode]?.q4 ?? 0,
+            comment: prev[activityCode]?.comment ?? "",
+            paymentStatus: status,
+            amountPaid: amountPaid,
+          },
+        };
+        onDataChange?.(next);
+        return next;
+      });
+      form.setValue(`${activityCode}.paymentStatus`, status, { shouldDirty: true });
+      form.setValue(`${activityCode}.amountPaid`, amountPaid, { shouldDirty: true });
     },
     [form, onDataChange]
   );
@@ -338,13 +383,9 @@ export function useExecutionForm({
           const sectionPart = codeParts.find((part: string) => /^[A-G]$/i.test(part));
           const sectionCode = sectionPart?.toUpperCase() || '';
 
-          console.log(`ðŸ’° [buildActivityRow] Activity: ${activity.name} (${activity.code})`);
-          console.log(`ðŸ’° [buildActivityRow] Code parts: ${codeParts.join(', ')}`);
-          console.log(`ðŸ’° [buildActivityRow] Section: ${sectionCode}, Q1=${q1}, Q2=${q2}, Q3=${q3}, Q4=${q4}`);
 
           // Stock sections (D, E) use latest quarter with data (including explicit zeros)
           if (sectionCode === 'D' || sectionCode === 'E') {
-            console.log(`ðŸ’° [buildActivityRow] Stock section detected - using latest quarter`);
             // Check quarters in reverse order (Q4 -> Q3 -> Q2 -> Q1)
             // Use the latest quarter that has been explicitly set (even if it's 0)
             // We check the original state to see if a value was explicitly entered
@@ -353,7 +394,6 @@ export function useExecutionForm({
             const stateQ2 = state.q2;
             const stateQ1 = state.q1;
 
-            console.log(`ðŸ’° [buildActivityRow] State values: Q1=${stateQ1}, Q2=${stateQ2}, Q3=${stateQ3}, Q4=${stateQ4}`);
 
             // Check if a quarter has been explicitly set (not undefined/null) AND has non-zero value
             // For stock sections, we only want quarters with actual data
@@ -366,35 +406,27 @@ export function useExecutionForm({
             const hasQ2 = stateQ2 !== undefined && stateQ2 !== null && (q2 !== 0 || currentQuarterIndex >= 1);
             const hasQ1 = stateQ1 !== undefined && stateQ1 !== null && (q1 !== 0 || currentQuarterIndex >= 0);
 
-            console.log(`ðŸ’° [buildActivityRow] Has data: Q1=${hasQ1}, Q2=${hasQ2}, Q3=${hasQ3}, Q4=${hasQ4}`);
 
             // For stock sections, use the latest REPORTED quarter (including 0)
             // We need to distinguish between "not reported" vs "reported as 0"
             // Check in reverse order and use the first quarter that has been reported
             if (hasQ4) {
               cumulativeBalance = q4;
-              console.log(`ðŸ’° [buildActivityRow] Using Q4 (reported): ${cumulativeBalance}`);
             } else if (hasQ3) {
               cumulativeBalance = q3;
-              console.log(`ðŸ’° [buildActivityRow] Using Q3 (reported): ${cumulativeBalance}`);
             } else if (hasQ2) {
               cumulativeBalance = q2;
-              console.log(`ðŸ’° [buildActivityRow] Using Q2 (reported): ${cumulativeBalance}`);
             } else if (hasQ1) {
               cumulativeBalance = q1;
-              console.log(`ðŸ’° [buildActivityRow] Using Q1 (reported): ${cumulativeBalance}`);
             } else {
               // No quarters reported - leave as undefined to show dash
               cumulativeBalance = undefined;
-              console.log(`ðŸ’° [buildActivityRow] No quarters reported, leaving undefined`);
             }
           } else {
             // Flow sections (A, B, C, F, G) use cumulative sum
             cumulativeBalance = q1 + q2 + q3 + q4;
-            console.log(`ðŸ’° [buildActivityRow] Flow section - cumulative sum: ${cumulativeBalance}`);
           }
 
-          console.log(`ðŸ’° [buildActivityRow] Final cumulative balance: ${cumulativeBalance}\n`);
         }
 
         return {
@@ -517,7 +549,7 @@ export function useExecutionForm({
 
     // Client-side derived sections: C = A - B, F = D - E, and G incorporates C into its child
     function deriveDiff(
-      a?: { q1: number; q2: number; q3: number; q4: number }, 
+      a?: { q1: number; q2: number; q3: number; q4: number },
       b?: { q1: number; q2: number; q3: number; q4: number },
       type: 'flow' | 'stock' = 'flow'
     ) {
@@ -527,9 +559,9 @@ export function useExecutionForm({
       const q2 = safeA.q2 - safeB.q2;
       const q3 = safeA.q3 - safeB.q3;
       const q4 = safeA.q4 - safeB.q4;
-      
+
       let cumulativeBalance: number;
-      
+
       if (type === 'stock') {
         // CRITICAL FIX: For stock sections (D, E), use latest quarter value
         // D and E are balance sheet items (point-in-time), not income statement items (flow)
@@ -547,7 +579,7 @@ export function useExecutionForm({
         // For flow sections (A, B, C), sum all quarters
         cumulativeBalance = q1 + q2 + q3 + q4;
       }
-      
+
       return { q1, q2, q3, q4, cumulativeBalance };
     }
 
@@ -800,6 +832,7 @@ export function useExecutionForm({
     // Handlers
     onFieldChange: handleFieldChange,
     onCommentChange: setComment,
+    updateExpensePayment,
 
     // Status
     isLoading,

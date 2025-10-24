@@ -13,6 +13,7 @@ import { useExecutionSubmissionHandler } from "@/hooks/use-execution-submission-
 import useCheckExistingExecution from "@/hooks/queries/executions/use-check-existing-execution";
 import { toast } from "sonner";
 import { useGetCurrentReportingPeriod } from "@/hooks/queries";
+import { useExpenseCalculations } from "@/features/execution/hooks/use-expense-calculations";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -45,6 +46,10 @@ export function EnhancedExecutionFormAutoLoad({
   programName: programNameProp, 
   schemaId: schemaIdProp 
 }: EnhancedExecutionFormAutoLoadProps) {
+  console.log('='.repeat(80));
+  console.log('🚀 PAYMENT TRACKING: EnhancedExecutionFormAutoLoad RENDERING');
+  console.log('='.repeat(80));
+  
   const effectiveMode: "create" | "edit" | "view" = (mode === "readOnly" ? "view" : mode) as any;
   const isReadOnly = effectiveMode === "view";
   const { data: currentReportingPeriod } = useGetCurrentReportingPeriod();
@@ -52,6 +57,23 @@ export function EnhancedExecutionFormAutoLoad({
   const form = useExecutionForm({ projectType, facilityType, quarter, executionId, initialData });
   const searchParams = useSearchParams();
   const router = useRouter();
+  
+  console.log('📊 [AutoLoad] Form initialized:', {
+    formDataKeysCount: Object.keys(form.formData).length,
+    activitiesAvailable: !!form.activities,
+  });
+  
+  // Debug: Log activities structure for Section E
+  if (form.activities) {
+    console.log('🔍 [AutoLoad] Activities Structure:', {
+      sectionBExists: !!form.activities.B,
+      sectionBHasSubCategories: !!form.activities.B?.subCategories,
+      sectionEExists: !!form.activities.E,
+      sectionEStructure: form.activities.E ? Object.keys(form.activities.E) : [],
+      sectionEItems: form.activities.E?.items?.length || 0,
+      sampleSectionEItems: form.activities.E?.items?.slice(0, 3),
+    });
+  }
 
   // Extract IDs for checking existing execution
   const projectIdFromUrl = searchParams?.get("projectId") || "";
@@ -112,6 +134,9 @@ export function EnhancedExecutionFormAutoLoad({
               q3: Number(activityObj.q3 || 0),
               q4: Number(activityObj.q4 || 0),
               comment: String(activityObj.comment || ""),
+              // Restore payment tracking data with backward compatibility defaults
+              paymentStatus: activityObj.paymentStatus || "unpaid",
+              amountPaid: Number(activityObj.amountPaid) || 0,
             };
           }
         });
@@ -134,6 +159,145 @@ export function EnhancedExecutionFormAutoLoad({
       }
     }
   }, [existingExecution?.exists, existingExecution?.entry?.id, initialData]); // Simplified dependencies
+
+  // ===== PAYMENT TRACKING LOGIC =====
+  // Get opening balance from Section A-2
+  const openingBalanceCode = useMemo(() => {
+    const projectPrefix = projectType.toUpperCase();
+    const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
+    return `${projectPrefix}_EXEC_${facilityPrefix}_A_2`;
+  }, [projectType, facilityType]);
+
+  const openingBalance = useMemo(() => {
+    const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+    const value = Number(form.formData[openingBalanceCode]?.[quarterKey]) || 0;
+    
+    console.log('🔍 [AutoLoad - Opening Balance] Debug:', {
+      openingBalanceCode,
+      quarterKey,
+      extractedValue: value,
+      formDataEntry: form.formData[openingBalanceCode],
+    });
+    
+    return value;
+  }, [form.formData, openingBalanceCode, quarter]);
+
+  // Use expense calculations hook to compute Cash at Bank and Payables
+  const { cashAtBank, payables, totalPaid, totalUnpaid } = useExpenseCalculations({
+    formData: form.formData,
+    openingBalance,
+    activities: form.activities,
+    quarter,
+  });
+
+  console.log('💰 [AutoLoad - Payment Tracking] Calculations:', {
+    openingBalance,
+    cashAtBank,
+    totalPaid,
+    totalUnpaid,
+    payablesCount: Object.keys(payables).length,
+  });
+  
+  // Debug: Check if Section D and E codes exist in formData
+  const projectPrefix = projectType.toUpperCase();
+  const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
+  const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
+  const sectionDCodes = Object.keys(form.formData).filter(k => k.includes('_D_'));
+  const sectionECodes = Object.keys(form.formData).filter(k => k.includes('_E_'));
+  
+  console.log('🔍 [AutoLoad] Section D & E Debug:', {
+    cashAtBankCode,
+    cashAtBankCodeExists: cashAtBankCode in form.formData,
+    sectionDCodes,
+    sectionECodes,
+    allFormDataCodes: Object.keys(form.formData),
+  });
+
+  // Auto-update Section D (Cash at Bank) and Section E (Payables) with computed values
+  // ONLY in create mode - in edit mode, values are loaded from backend
+  const hasInitializedRef = useRef(false);
+  
+  useEffect(() => {
+    console.log('🔧 [AutoLoad] useEffect triggered:', {
+      mode: effectiveMode,
+      hasActivities: !!form.activities,
+      cashAtBank,
+      payablesCount: Object.keys(payables).length,
+      hasInitialized: hasInitializedRef.current,
+    });
+    
+    // Skip auto-update in edit/view mode - values are already loaded from backend
+    if (effectiveMode === 'edit' || effectiveMode === 'view') {
+      console.log('⚠️ [AutoLoad] Skipping auto-update - in edit/view mode, using backend values');
+      return;
+    }
+    
+    if (!form.activities) {
+      console.log('⚠️ [AutoLoad] Skipping update - activities not available yet');
+      return;
+    }
+
+    const projectPrefix = projectType.toUpperCase();
+    const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
+    const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
+    
+    const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+    const currentCashValue = form.formData[cashAtBankCode]?.[quarterKey];
+    
+    console.log('💰 [AutoLoad] Updating Cash at Bank:', {
+      cashAtBankCode,
+      currentValue: currentCashValue,
+      newValue: cashAtBank,
+      willUpdate: currentCashValue !== cashAtBank,
+      formDataHasCode: cashAtBankCode in form.formData,
+    });
+    
+    if (currentCashValue !== cashAtBank) {
+      console.log('🔄 [AutoLoad] Calling onFieldChange for Cash at Bank');
+      form.onFieldChange(cashAtBankCode, cashAtBank);
+    }
+
+    // Update all payable category fields
+    // Get all Section E codes from formData
+    const allSectionECodes = Object.keys(form.formData).filter(code => code.includes('_E_'));
+    
+    console.log('🔍 [AutoLoad] Payables update:', {
+      payablesWithValues: Object.keys(payables),
+      allSectionECodes,
+    });
+    
+    // Update payables that have values
+    Object.entries(payables).forEach(([payableCode, amount]) => {
+      const currentPayableValue = form.formData[payableCode]?.[quarterKey];
+      
+      if (currentPayableValue !== amount) {
+        console.log('🔄 [AutoLoad] Updating Payable:', { payableCode, amount });
+        form.onFieldChange(payableCode, amount);
+      }
+    });
+    
+    // Clear payables that should be 0 (not in the payables object)
+    allSectionECodes.forEach((payableCode) => {
+      // Skip if this payable already has a value in the payables object
+      if (payableCode in payables) {
+        return;
+      }
+      
+      const currentPayableValue = form.formData[payableCode]?.[quarterKey];
+      
+      // If the current value is not 0, clear it
+      if (currentPayableValue !== 0 && currentPayableValue !== undefined) {
+        console.log('🧹 [AutoLoad] Clearing payable to 0:', {
+          payableCode,
+          currentValue: currentPayableValue,
+        });
+        form.onFieldChange(payableCode, 0);
+      }
+    });
+    
+    hasInitializedRef.current = true;
+  }, [cashAtBank, payables, form.activities, projectType, facilityType, quarter, form.formData, form.onFieldChange, effectiveMode]);
+  // ===== END PAYMENT TRACKING LOGIC =====
 
   // Initialize the smart submission handler
   const { handleSubmission, isSubmitting, error } = useExecutionSubmissionHandler({
@@ -175,7 +339,7 @@ export function EnhancedExecutionFormAutoLoad({
 
   function buildSubmissionActivities() {
     const entries = Object.entries(form.formData || {});
-    return entries
+    const activities = entries
       .map(([code, v]: any) => ({
         code,
         q1: Number(v?.q1) || 0,
@@ -183,9 +347,22 @@ export function EnhancedExecutionFormAutoLoad({
         q3: Number(v?.q3) || 0,
         q4: Number(v?.q4) || 0,
         comment: typeof v?.comment === "string" ? v.comment : "",
+        // Include payment tracking data
+        paymentStatus: v?.paymentStatus || "unpaid",
+        amountPaid: Number(v?.amountPaid) || 0,
       }))
       // Drop totals/computed placeholders if they carry no data
       .filter(a => (a.q1 + a.q2 + a.q3 + a.q4) !== 0 || (a.comment ?? "").trim().length > 0);
+    
+    // Debug: Log what we're sending
+    console.log('📤 [buildSubmissionActivities] Sending to backend:', {
+      totalActivities: activities.length,
+      sectionBExpenses: activities.filter(a => a.code.includes('_B_')),
+      sectionDCashAtBank: activities.filter(a => a.code.includes('_D_')),
+      sectionEPayables: activities.filter(a => a.code.includes('_E_')),
+    });
+    
+    return activities;
   }
 
   const saveDraft = useCallback(() => {
@@ -241,6 +418,19 @@ export function EnhancedExecutionFormAutoLoad({
     if (isReadOnly || isSubmitting) return;
 
     try {
+      console.log('💾 [handleSmartSubmission] Starting submission...');
+      
+      // Log current formData state for Section E before building activities
+      const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+      const sectionEData = Object.keys(form.formData)
+        .filter(code => code.includes('_E_'))
+        .map(code => ({
+          code,
+          value: form.formData[code]?.[quarterKey],
+        }));
+      
+      console.log('📊 [handleSmartSubmission] Section E values in formData:', sectionEData);
+      
       // Extract form parameters
       const programParam = searchParams?.get("program");
       const programAsProjectId = programParam && /^\d+$/.test(programParam) ? Number(programParam) : null;
@@ -313,6 +503,7 @@ export function EnhancedExecutionFormAutoLoad({
       computedValues: form.computedValues,
       onFieldChange: isReadOnly ? () => {} : form.onFieldChange,
       onCommentChange: isReadOnly ? () => {} : form.onCommentChange,
+      updateExpensePayment: isReadOnly ? () => {} : form.updateExpensePayment,
       validationErrors: form.validationErrors,
       isCalculating: form.status.isCalculating,
       isValidating: form.status.isValidating,

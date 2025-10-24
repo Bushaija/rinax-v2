@@ -1,10 +1,13 @@
 import React, { createContext, useContext } from 'react';
 
+type PaymentStatus = "paid" | "unpaid" | "partial";
+
 interface ExecutionFormContextValue {
   formData: Record<string, any>;
   computedValues: Record<string, any> | null;
   onFieldChange: (activityCode: string, value: number) => void;
   onCommentChange: (activityCode: string, comment: string) => void;
+  updateExpensePayment: (activityCode: string, status: PaymentStatus, amountPaid: number) => void;
   validationErrors: Record<string, any>;
   isCalculating: boolean;
   isValidating: boolean;

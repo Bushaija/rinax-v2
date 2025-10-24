@@ -13,6 +13,7 @@ import { useCreateExecution } from "@/hooks/mutations/executions/use-create-exec
 import { useUpdateExecution } from "@/hooks/mutations/executions/use-update-execution";
 import { toast } from "sonner";
 import { useGetCurrentReportingPeriod } from "@/hooks/queries";
+import { useExpenseCalculations } from "@/features/execution/hooks/use-expense-calculations";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -32,11 +33,25 @@ interface EnhancedExecutionFormProps {
 }
 
 export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode = "create", executionId, initialData, projectId: projectIdProp, facilityId: facilityIdProp, reportingPeriodId: reportingPeriodIdProp, facilityName: facilityNameProp, programName: programNameProp, schemaId: schemaIdProp }: EnhancedExecutionFormProps) {
+  // Very loud logging that can't be missed
+  if (typeof window !== 'undefined') {
+    (window as any).PAYMENT_TRACKING_DEBUG = true;
+  }
+  
+  console.log('='.repeat(80));
+  console.log('🚀 PAYMENT TRACKING: EnhancedExecutionForm RENDERING');
+  console.log('='.repeat(80));
+  console.log('🚀 [EnhancedExecutionForm] Component rendering with:', { projectType, facilityType, quarter, mode });
+  
   const effectiveMode: "create" | "edit" | "view" = (mode === "readOnly" ? "view" : mode) as any;
   const isReadOnly = effectiveMode === "view";
   const { data: currentReportingPeriod } = useGetCurrentReportingPeriod();
   
   const form = useExecutionForm({ projectType, facilityType, quarter, executionId, initialData });
+  
+  console.log('📊 [EnhancedExecutionForm] Form data keys count:', Object.keys(form.formData).length);
+  console.log('📊 [EnhancedExecutionForm] Activities available:', !!form.activities);
+  console.log('📊 [EnhancedExecutionForm] Sample formData keys:', Object.keys(form.formData).slice(0, 5));
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -70,6 +85,160 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
   const createExecutionMutation = useCreateExecution();
   const updateExecutionMutation = useUpdateExecution();
 
+  // Get opening balance from Section A-2
+  const openingBalanceCode = useMemo(() => {
+    // Find the opening balance code from activities
+    // Format: {PROJECT}_EXEC_{FACILITY}_A_2
+    const projectPrefix = projectType.toUpperCase();
+    const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
+    return `${projectPrefix}_EXEC_${facilityPrefix}_A_2`;
+  }, [projectType, facilityType]);
+
+  const openingBalance = useMemo(() => {
+    const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+    const value = Number(form.formData[openingBalanceCode]?.[quarterKey]) || 0;
+    
+    console.log('🔍 [Opening Balance] Debug:', {
+      openingBalanceCode,
+      quarterKey,
+      formDataKeys: Object.keys(form.formData).slice(0, 10),
+      formDataEntry: form.formData[openingBalanceCode],
+      extractedValue: value,
+      allFormDataSample: Object.entries(form.formData).slice(0, 3).map(([k, v]) => ({ code: k, data: v })),
+    });
+    
+    return value;
+  }, [form.formData, openingBalanceCode, quarter]);
+
+  console.log('🎯 [EnhancedExecutionForm] About to call useExpenseCalculations with:', {
+    formDataKeysCount: Object.keys(form.formData).length,
+    openingBalance,
+    activitiesAvailable: !!form.activities,
+    quarter,
+  });
+
+  // Use expense calculations hook to compute Cash at Bank and Payables
+  const { cashAtBank, payables, totalPaid, totalUnpaid } = useExpenseCalculations({
+    formData: form.formData,
+    openingBalance,
+    activities: form.activities,
+    quarter,
+  });
+  
+  console.log('🎯 [EnhancedExecutionForm] useExpenseCalculations returned:', {
+    cashAtBank,
+    totalPaid,
+    totalUnpaid,
+    payablesCount: Object.keys(payables).length,
+  });
+
+  // Debug logging
+  useEffect(() => {
+    console.log('💰 [Payment Tracking] Calculations:', {
+      projectType,
+      facilityType,
+      quarter,
+      openingBalance,
+      openingBalanceCode,
+      cashAtBank,
+      totalPaid,
+      totalUnpaid,
+      payablesCount: Object.keys(payables).length,
+      payables,
+      activitiesAvailable: !!form.activities,
+      formDataKeysCount: Object.keys(form.formData).length,
+    });
+  }, [openingBalance, openingBalanceCode, cashAtBank, totalPaid, totalUnpaid, payables, projectType, facilityType, quarter, form.activities, form.formData]);
+
+  // Auto-update Section D (Cash at Bank) and Section E (Payables) with computed values
+  // ONLY in create mode - in edit mode, values are loaded from backend
+  useEffect(() => {
+    // Skip auto-update in edit/view mode - values are already loaded from backend
+    if (effectiveMode === 'edit' || effectiveMode === 'view') {
+      console.log('⚠️ [Payment Tracking] Skipping auto-update - in edit/view mode, using backend values');
+      return;
+    }
+    
+    if (!form.activities) return;
+
+    // Update Cash at Bank (D-1)
+    const projectPrefix = projectType.toUpperCase();
+    const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
+    const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
+    
+    const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+    const currentCashValue = form.formData[cashAtBankCode]?.[quarterKey];
+    
+    console.log('💰 [Payment Tracking] Updating Cash at Bank:', {
+      cashAtBankCode,
+      quarterKey,
+      currentValue: currentCashValue,
+      newValue: cashAtBank,
+      willUpdate: currentCashValue !== cashAtBank,
+      formDataHasCode: cashAtBankCode in form.formData,
+      formDataEntry: form.formData[cashAtBankCode],
+    });
+    
+    // Only update if the value has changed to avoid infinite loops
+    if (currentCashValue !== cashAtBank) {
+      console.log('🔄 [Payment Tracking] Calling onFieldChange for Cash at Bank');
+      form.onFieldChange(cashAtBankCode, cashAtBank);
+      console.log('✅ [Payment Tracking] onFieldChange called, new formData:', form.formData[cashAtBankCode]);
+    } else {
+      console.log('⏭️ [Payment Tracking] Skipping update - value unchanged');
+    }
+
+    // Update all payable category fields
+    // Get all Section E codes from formData
+    const allSectionECodes = Object.keys(form.formData).filter(code => code.includes('_E_'));
+    
+    console.log('💰 [Payment Tracking] Processing payables:', {
+      payablesCount: Object.keys(payables).length,
+      payablesCodes: Object.keys(payables),
+      allSectionECodes,
+    });
+    
+    // Update payables that have values
+    Object.entries(payables).forEach(([payableCode, amount]) => {
+      const currentPayableValue = form.formData[payableCode]?.[quarterKey];
+      
+      console.log('💰 [Payment Tracking] Updating Payable:', {
+        payableCode,
+        currentValue: currentPayableValue,
+        newValue: amount,
+        willUpdate: currentPayableValue !== amount,
+        formDataHasCode: payableCode in form.formData,
+      });
+      
+      // Only update if the value has changed
+      if (currentPayableValue !== amount) {
+        console.log('🔄 [Payment Tracking] Calling onFieldChange for Payable');
+        form.onFieldChange(payableCode, amount);
+      } else {
+        console.log('⏭️ [Payment Tracking] Skipping payable update - value unchanged');
+      }
+    });
+    
+    // Clear payables that should be 0 (not in the payables object)
+    allSectionECodes.forEach((payableCode) => {
+      // Skip if this payable already has a value in the payables object
+      if (payableCode in payables) {
+        return;
+      }
+      
+      const currentPayableValue = form.formData[payableCode]?.[quarterKey];
+      
+      // If the current value is not 0, clear it
+      if (currentPayableValue !== 0 && currentPayableValue !== undefined) {
+        console.log('🧹 [Payment Tracking] Clearing payable to 0:', {
+          payableCode,
+          currentValue: currentPayableValue,
+        });
+        form.onFieldChange(payableCode, 0);
+      }
+    });
+  }, [cashAtBank, payables, form.activities, projectType, facilityType, quarter, form.formData, form.onFieldChange, effectiveMode]);
+
   function buildSubmissionActivities() {
     const entries = Object.entries(form.formData || {});
     return entries
@@ -80,6 +249,9 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
         q3: Number(v?.q3) || 0,
         q4: Number(v?.q4) || 0,
         comment: typeof v?.comment === "string" ? v.comment : "",
+        // Include payment tracking data
+        paymentStatus: v?.paymentStatus || "unpaid",
+        amountPaid: Number(v?.amountPaid) || 0,
       }))
       // Drop totals/computed placeholders if they carry no data
       .filter(a => (a.q1 + a.q2 + a.q3 + a.q4) !== 0 || (a.comment ?? "").trim().length > 0);
@@ -132,6 +304,7 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
       computedValues: form.computedValues,
       onFieldChange: isReadOnly ? () => {} : form.onFieldChange,
       onCommentChange: isReadOnly ? () => {} : form.onCommentChange,
+      updateExpensePayment: isReadOnly ? () => {} : form.updateExpensePayment,
       validationErrors: form.validationErrors,
       isCalculating: form.status.isCalculating,
       isValidating: form.status.isValidating,
