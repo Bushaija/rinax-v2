@@ -23,7 +23,7 @@ const ALL_NAV_ITEMS: RoleNavItem[] = [
     url: '/dashboard/planning',
     icon: 'clipboardList',
     shortcut: ['p', 'p'],
-    roles: ['accountant', 'program_manager'],
+    roles: ['accountant', 'program_manager', 'admin'],
     // items: [
     //   {
     //     title: 'Planning Forms',
@@ -52,7 +52,7 @@ const ALL_NAV_ITEMS: RoleNavItem[] = [
     url: '/dashboard/execution',
     icon: 'checkList',
     shortcut: ['e', 'e'],
-    roles: ['accountant', 'program_manager'],
+    roles: ['accountant', 'program_manager', 'admin'],
     // items: [
     //   {
     //     title: 'Execution Forms',
@@ -85,7 +85,7 @@ const ALL_NAV_ITEMS: RoleNavItem[] = [
     url: '/dashboard/compiled',
     icon: 'layers',
     shortcut: ['e', 'e'],
-    roles: ['accountant', 'program_manager'],
+    roles: ['accountant', 'program_manager', 'admin'],
     // items: [
     //   {
     //     title: 'Execution Forms',

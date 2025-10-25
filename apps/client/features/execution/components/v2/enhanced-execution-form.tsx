@@ -151,11 +151,10 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
   }, [openingBalance, openingBalanceCode, cashAtBank, totalPaid, totalUnpaid, payables, projectType, facilityType, quarter, form.activities, form.formData]);
 
   // Auto-update Section D (Cash at Bank) and Section E (Payables) with computed values
-  // ONLY in create mode - in edit mode, values are loaded from backend
   useEffect(() => {
-    // Skip auto-update in edit/view mode - values are already loaded from backend
-    if (effectiveMode === 'edit' || effectiveMode === 'view') {
-      console.log('⚠️ [Payment Tracking] Skipping auto-update - in edit/view mode, using backend values');
+    // Skip auto-update in view mode only (read-only)
+    if (effectiveMode === 'view') {
+      console.log('⚠️ [Payment Tracking] Skipping auto-update - in view mode (read-only)');
       return;
     }
     
@@ -241,20 +240,37 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
 
   function buildSubmissionActivities() {
     const entries = Object.entries(form.formData || {});
-    return entries
-      .map(([code, v]: any) => ({
-        code,
-        q1: Number(v?.q1) || 0,
-        q2: Number(v?.q2) || 0,
-        q3: Number(v?.q3) || 0,
-        q4: Number(v?.q4) || 0,
-        comment: typeof v?.comment === "string" ? v.comment : "",
-        // Include payment tracking data
-        paymentStatus: v?.paymentStatus || "unpaid",
-        amountPaid: Number(v?.amountPaid) || 0,
-      }))
+    const activities = entries
+      .map(([code, v]: any) => {
+        const activity = {
+          code,
+          q1: Number(v?.q1) || 0,
+          q2: Number(v?.q2) || 0,
+          q3: Number(v?.q3) || 0,
+          q4: Number(v?.q4) || 0,
+          comment: typeof v?.comment === "string" ? v.comment : "",
+          // Include payment tracking data (now supports quarter-specific format)
+          paymentStatus: v?.paymentStatus || "unpaid",
+          amountPaid: v?.amountPaid || 0,
+        };
+        
+        // Debug: Log activities with payment tracking data
+        if (code.includes('_B_') && v?.paymentStatus && v?.paymentStatus !== 'unpaid') {
+          console.log('💾 [buildSubmissionActivities] Section B with payment data:', {
+            code,
+            paymentStatus: v?.paymentStatus,
+            amountPaid: v?.amountPaid,
+            builtActivity: activity,
+          });
+        }
+        
+        return activity;
+      })
       // Drop totals/computed placeholders if they carry no data
       .filter(a => (a.q1 + a.q2 + a.q3 + a.q4) !== 0 || (a.comment ?? "").trim().length > 0);
+    
+    console.log('💾 [buildSubmissionActivities] Total activities:', activities.length);
+    return activities;
   }
 
   const saveDraft = useCallback(() => {

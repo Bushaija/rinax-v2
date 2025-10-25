@@ -28,8 +28,9 @@ interface ActivityQuarterValues {
   q3: number;
   q4: number;
   comment?: string;
-  paymentStatus?: PaymentStatus;
-  amountPaid?: number;
+  // Payment status can be either a single value (old format) or quarter-specific (new format)
+  paymentStatus?: PaymentStatus | Record<string, PaymentStatus>;
+  amountPaid?: number | Record<string, number>;
 }
 
 export function useExecutionForm({
@@ -261,26 +262,63 @@ export function useExecutionForm({
 
   const updateExpensePayment = useCallback(
     (activityCode: string, status: PaymentStatus, amountPaid: number) => {
+      const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
+
+      console.log('💳 [updateExpensePayment] Called with:', {
+        activityCode,
+        status,
+        amountPaid,
+        quarterKey,
+      });
+
       setFormData(prev => {
+        const existing = prev[activityCode];
+
+        // Get existing payment status data (support both old and new format)
+        const existingPaymentStatus = existing?.paymentStatus;
+        const existingAmountPaid = existing?.amountPaid;
+
+        // Create quarter-specific payment status object
+        const paymentStatusObj = typeof existingPaymentStatus === 'object' && existingPaymentStatus !== null && !Array.isArray(existingPaymentStatus)
+          ? { ...(existingPaymentStatus as Record<string, any>), [quarterKey]: status }
+          : { [quarterKey]: status };
+
+        const amountPaidObj = typeof existingAmountPaid === 'object' && existingAmountPaid !== null && !Array.isArray(existingAmountPaid)
+          ? { ...(existingAmountPaid as Record<string, any>), [quarterKey]: amountPaid }
+          : { [quarterKey]: amountPaid };
+
+        console.log('💳 [updateExpensePayment] Creating objects:', {
+          existingPaymentStatus,
+          existingAmountPaid,
+          paymentStatusObj,
+          amountPaidObj,
+        });
+
         const next = {
           ...prev,
           [activityCode]: {
-            q1: prev[activityCode]?.q1 ?? 0,
-            q2: prev[activityCode]?.q2 ?? 0,
-            q3: prev[activityCode]?.q3 ?? 0,
-            q4: prev[activityCode]?.q4 ?? 0,
-            comment: prev[activityCode]?.comment ?? "",
-            paymentStatus: status,
-            amountPaid: amountPaid,
+            q1: existing?.q1 ?? 0,
+            q2: existing?.q2 ?? 0,
+            q3: existing?.q3 ?? 0,
+            q4: existing?.q4 ?? 0,
+            comment: existing?.comment ?? "",
+            paymentStatus: paymentStatusObj,
+            amountPaid: amountPaidObj,
           },
         };
+
+        console.log('💳 [updateExpensePayment] Updated formData:', {
+          activityCode,
+          updatedActivity: next[activityCode],
+        });
+
         onDataChange?.(next);
         return next;
       });
-      form.setValue(`${activityCode}.paymentStatus`, status, { shouldDirty: true });
-      form.setValue(`${activityCode}.amountPaid`, amountPaid, { shouldDirty: true });
+      form.setValue(`${activityCode}.paymentStatus.${quarterKey}`, status, { shouldDirty: true });
+      form.setValue(`${activityCode}.amountPaid.${quarterKey}`, amountPaid, { shouldDirty: true });
     },
-    [form, onDataChange]
+    [form, onDataChange, quarter]
   );
 
   const isLoading = schemaQuery.isLoading || activitiesQuery.isLoading;

@@ -25,13 +25,11 @@ import {
   provinces,
   account,
   session,
-  verification
 } from "../schema";
 
 // === ENHANCED CORE RELATIONS ===
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
-  // Original relations
   facility: one(facilities, {
     fields: [projects.facilityId],
     references: [facilities.id]
@@ -44,7 +42,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     fields: [projects.userId],
     references: [users.id]
   }),
-  // New schema-driven relations
   formSchemas: many(formSchemas),
   financialReports: many(financialReports),
   formDataEntries: many(schemaFormDataEntries),
@@ -242,6 +239,14 @@ export const facilitiesRelations = relations(facilities, ({ one, many }) => ({
   district: one(districts, {
     fields: [facilities.districtId],
     references: [districts.id]
+  }),
+  parentFacility: one(facilities, {
+    fields: [facilities.parentFacilityId],
+    references: [facilities.id],
+    relationName: "facility_hierarchy",
+  }),
+  childFacilities: many(facilities, {
+    relationName: "facility_hierarchy",
   }),
   formDataEntries: many(schemaFormDataEntries),
   projects: many(projects),

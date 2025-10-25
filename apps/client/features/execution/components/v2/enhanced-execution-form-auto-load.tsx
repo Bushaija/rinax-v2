@@ -226,9 +226,9 @@ export function EnhancedExecutionFormAutoLoad({
       hasInitialized: hasInitializedRef.current,
     });
     
-    // Skip auto-update in edit/view mode - values are already loaded from backend
-    if (effectiveMode === 'edit' || effectiveMode === 'view') {
-      console.log('⚠️ [AutoLoad] Skipping auto-update - in edit/view mode, using backend values');
+    // Skip auto-update in view mode only (read-only)
+    if (effectiveMode === 'view') {
+      console.log('⚠️ [AutoLoad] Skipping auto-update - in view mode (read-only)');
       return;
     }
     

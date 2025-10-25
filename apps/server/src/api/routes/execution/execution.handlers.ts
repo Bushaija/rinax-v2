@@ -364,12 +364,18 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
       }
 
       // Build a map of existing values keyed by code (so missing items default to 0)
-      const valueByCode = new Map<string, { q1: number; q2: number; q3: number; q4: number }>();
+      const valueByCode = new Map<string, { q1: number; q2: number; q3: number; q4: number; paymentStatus?: string; amountPaid?: number }>();
       for (const a of activitiesArray) {
         const code = a?.code as string;
         if (!code) continue;
         valueByCode.set(code, {
-          q1: Number(a.q1 || 0), q2: Number(a.q2 || 0), q3: Number(a.q3 || 0), q4: Number(a.q4 || 0)
+          q1: Number(a.q1 || 0), 
+          q2: Number(a.q2 || 0), 
+          q3: Number(a.q3 || 0), 
+          q4: Number(a.q4 || 0),
+          // Include payment tracking fields
+          paymentStatus: a.paymentStatus || undefined,
+          amountPaid: a.amountPaid !== undefined ? Number(a.amountPaid) : undefined,
         });
       }
 
@@ -454,7 +460,7 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
       const pushItem = (rec: any, targetArr: any[]) => {
         const code = rec.code as string;
         const label = codeToName.get(code) || code;
-        const v = valueByCode.get(code) || { q1: undefined, q2: undefined, q3: undefined, q4: undefined };
+        const v = valueByCode.get(code) || { q1: undefined, q2: undefined, q3: undefined, q4: undefined, paymentStatus: undefined, amountPaid: undefined };
 
         // Calculate cumulative_balance for UI display
         // Pass code and label for Section G intelligent detection
@@ -463,7 +469,7 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
           v.q1, v.q2, v.q3, v.q4, section, subSection, code, label
         );
 
-        const item = {
+        const item: any = {
           code,
           label,
           q1: v.q1,
@@ -473,6 +479,15 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
           total: (v.q1 || 0) + (v.q2 || 0) + (v.q3 || 0) + (v.q4 || 0),
           cumulative_balance: cumulativeBalance
         };
+        
+        // Include payment tracking fields if they exist (for Section B expenses)
+        if (v.paymentStatus !== undefined) {
+          item.paymentStatus = v.paymentStatus;
+        }
+        if (v.amountPaid !== undefined) {
+          item.amountPaid = v.amountPaid;
+        }
+        
         targetArr.push(item);
         return item.total;
       };
@@ -1873,12 +1888,18 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
         }
 
         // Build a map of existing values keyed by code (so missing items default to 0)
-        const valueByCode = new Map<string, { q1: number; q2: number; q3: number; q4: number }>();
+        const valueByCode = new Map<string, { q1: number; q2: number; q3: number; q4: number; paymentStatus?: string; amountPaid?: number }>();
         for (const a of activitiesArray) {
           const code = a?.code as string;
           if (!code) continue;
           valueByCode.set(code, {
-            q1: Number(a.q1 || 0), q2: Number(a.q2 || 0), q3: Number(a.q3 || 0), q4: Number(a.q4 || 0)
+            q1: Number(a.q1 || 0), 
+            q2: Number(a.q2 || 0), 
+            q3: Number(a.q3 || 0), 
+            q4: Number(a.q4 || 0),
+            // Include payment tracking fields
+            paymentStatus: a.paymentStatus || undefined,
+            amountPaid: a.amountPaid !== undefined ? Number(a.amountPaid) : undefined,
           });
         }
 
@@ -1962,7 +1983,7 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
         const pushItem = (rec: any, targetArr: any[]) => {
           const code = rec.code as string;
           const label = codeToName.get(code) || code;
-          const v = valueByCode.get(code) || { q1: undefined, q2: undefined, q3: undefined, q4: undefined };
+          const v = valueByCode.get(code) || { q1: undefined, q2: undefined, q3: undefined, q4: undefined, paymentStatus: undefined, amountPaid: undefined };
 
           // Calculate cumulative_balance for UI display
           // Pass code and label for Section G intelligent detection
@@ -1971,7 +1992,7 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
             v.q1, v.q2, v.q3, v.q4, section, subSection, code, label
           );
 
-          const item = {
+          const item: any = {
             code,
             label,
             q1: v.q1,
@@ -1981,6 +2002,15 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
             total: (v.q1 || 0) + (v.q2 || 0) + (v.q3 || 0) + (v.q4 || 0),
             cumulative_balance: cumulativeBalance
           };
+          
+          // Include payment tracking fields if they exist (for Section B expenses)
+          if (v.paymentStatus !== undefined) {
+            item.paymentStatus = v.paymentStatus;
+          }
+          if (v.amountPaid !== undefined) {
+            item.amountPaid = v.amountPaid;
+          }
+          
           targetArr.push(item);
           return item.total;
         };

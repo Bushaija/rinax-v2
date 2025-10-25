@@ -15,8 +15,9 @@ export interface ExpenseFormData {
   q3: number;
   q4: number;
   comment?: string;
-  paymentStatus?: PaymentStatus;
-  amountPaid?: number;
+  // Payment status can be either a single value (old format) or quarter-specific (new format)
+  paymentStatus?: PaymentStatus | Record<string, PaymentStatus>;
+  amountPaid?: number | Record<string, number>;
 }
 
 /**
@@ -119,14 +120,26 @@ export function useExpenseCalculations({
         const quarterKey = quarter.toLowerCase() as 'q1' | 'q2' | 'q3' | 'q4';
         const amount = Number(expenseData[quarterKey]) || 0;
 
-        // Get payment information (default to unpaid if not specified)
-        const paymentStatus = expenseData.paymentStatus || 'unpaid';
+        // Get quarter-specific payment status (support both old and new format)
+        const paymentStatusData = expenseData.paymentStatus;
+        const amountPaidData = expenseData.amountPaid;
+        
+        const paymentStatus = amount > 0
+          ? (typeof paymentStatusData === 'object' && paymentStatusData !== null
+              ? (paymentStatusData[quarterKey] || 'unpaid')
+              : (paymentStatusData || 'unpaid'))
+          : 'unpaid';
+        
         let amountPaid = 0;
 
-        if (paymentStatus === 'paid') {
-          amountPaid = amount;
-        } else if (paymentStatus === 'partial') {
-          amountPaid = Number(expenseData.amountPaid) || 0;
+        if (amount > 0) {
+          if (paymentStatus === 'paid') {
+            amountPaid = amount;
+          } else if (paymentStatus === 'partial') {
+            amountPaid = typeof amountPaidData === 'object' && amountPaidData !== null
+              ? (Number(amountPaidData[quarterKey]) || 0)
+              : (Number(amountPaidData) || 0);
+          }
         }
 
         // Get the corresponding payable code

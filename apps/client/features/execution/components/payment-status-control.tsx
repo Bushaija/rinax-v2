@@ -50,13 +50,27 @@ export function PaymentStatusControl({
 
   // Update partial amount when amountPaid changes externally
   React.useEffect(() => {
+    console.log('🔄 [PaymentStatusControl] Updating partialAmount state:', {
+      expenseCode,
+      amountPaid,
+      amountPaidString: amountPaid.toString(),
+    });
     setPartialAmount(amountPaid.toString())
-  }, [amountPaid])
+  }, [amountPaid, expenseCode])
 
   // Focus management: focus first button when popover opens
   React.useEffect(() => {
-    if (open && fullyPaidButtonRef.current) {
-      fullyPaidButtonRef.current.focus()
+    if (open) {
+      console.log('📂 [PaymentStatusControl] Popover opened:', {
+        expenseCode,
+        paymentStatus,
+        amountPaid,
+        partialAmount,
+        partialAmountType: typeof partialAmount,
+      });
+      if (fullyPaidButtonRef.current) {
+        fullyPaidButtonRef.current.focus()
+      }
     }
   }, [open])
 

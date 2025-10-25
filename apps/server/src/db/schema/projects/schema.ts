@@ -26,8 +26,7 @@ export const projects = pgTable("projects", {
     facilityId: integer("facility_id"),
     reportingPeriodId: integer("reporting_period_id"),
     userId: integer("user_id"),
-    // Enhanced metadata for schema-driven system
-    metadata: jsonb("metadata"), // Store project-specific configurations
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp("updated_at", { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`),
   }, (table) => [
@@ -49,3 +48,4 @@ export const projects = pgTable("projects", {
     unique("projects_name_key").on(table.name),
     unique("projects_code_key").on(table.code),
   ])
+

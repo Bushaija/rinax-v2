@@ -308,16 +308,43 @@ export function ExecutionTable() {
                                         inputMode="decimal"
                                         onBlur={(e: React.FocusEvent<HTMLInputElement>) => ctx.onFieldChange(leaf.id, Number(e.target.value || 0))}
                                       />
-                                      {isSectionB && (
-                                        <PaymentStatusControl
-                                          expenseCode={leaf.id}
-                                          amount={value ?? 0}
-                                          paymentStatus={(ctx.formData[leaf.id]?.paymentStatus as PaymentStatus) ?? "unpaid"}
-                                          amountPaid={ctx.formData[leaf.id]?.amountPaid ?? 0}
-                                          onChange={(status, amountPaid) => ctx.updateExpensePayment(leaf.id, status, amountPaid)}
-                                          disabled={!editable}
-                                        />
-                                      )}
+                                      {isSectionB && (() => {
+                                        // Get quarter-specific payment status
+                                        const quarterKey = key as 'q1' | 'q2' | 'q3' | 'q4';
+                                        const paymentStatusData = ctx.formData[leaf.id]?.paymentStatus;
+                                        const amountPaidData = ctx.formData[leaf.id]?.amountPaid;
+                                        
+                                        // Support both old format (string) and new format (object with quarters)
+                                        const paymentStatus = typeof paymentStatusData === 'object' && paymentStatusData !== null
+                                          ? (paymentStatusData[quarterKey] ?? "unpaid")
+                                          : (paymentStatusData ?? "unpaid");
+                                        
+                                        const amountPaid = typeof amountPaidData === 'object' && amountPaidData !== null
+                                          ? (Number(amountPaidData[quarterKey]) || 0)
+                                          : (Number(amountPaidData) || 0);
+                                        
+                                        // Debug: Log payment data being passed
+                                        console.log('🔍 [Table] Payment control data for', leaf.id, {
+                                          key,
+                                          quarterKey,
+                                          value,
+                                          paymentStatusData,
+                                          amountPaidData,
+                                          extractedPaymentStatus: paymentStatus,
+                                          extractedAmountPaid: amountPaid,
+                                        });
+                                        
+                                        return (
+                                          <PaymentStatusControl
+                                            expenseCode={leaf.id}
+                                            amount={value ?? 0}
+                                            paymentStatus={paymentStatus as PaymentStatus}
+                                            amountPaid={amountPaid}
+                                            onChange={(status, amountPaid) => ctx.updateExpensePayment(leaf.id, status, amountPaid)}
+                                            disabled={!editable}
+                                          />
+                                        );
+                                      })()}
                                     </div>
                                   ) : (
                                     <span className={cn(locked && "text-gray-400")}>{formatValue(value)}</span>
@@ -455,16 +482,43 @@ export function ExecutionTable() {
                                 inputMode="decimal"
                                 onBlur={(e: React.FocusEvent<HTMLInputElement>) => ctx.onFieldChange(item.id, Number(e.target.value || 0))}
                               />
-                              {isSectionB && (
-                                <PaymentStatusControl
-                                  expenseCode={item.id}
-                                  amount={value ?? 0}
-                                  paymentStatus={(ctx.formData[item.id]?.paymentStatus as PaymentStatus) ?? "unpaid"}
-                                  amountPaid={ctx.formData[item.id]?.amountPaid ?? 0}
-                                  onChange={(status, amountPaid) => ctx.updateExpensePayment(item.id, status, amountPaid)}
-                                  disabled={!editable}
-                                />
-                              )}
+                              {isSectionB && (() => {
+                                // Get quarter-specific payment status
+                                const quarterKey = key as 'q1' | 'q2' | 'q3' | 'q4';
+                                const paymentStatusData = ctx.formData[item.id]?.paymentStatus;
+                                const amountPaidData = ctx.formData[item.id]?.amountPaid;
+                                
+                                // Support both old format (string) and new format (object with quarters)
+                                const paymentStatus = typeof paymentStatusData === 'object' && paymentStatusData !== null
+                                  ? (paymentStatusData[quarterKey] ?? "unpaid")
+                                  : (paymentStatusData ?? "unpaid");
+                                
+                                const amountPaid = typeof amountPaidData === 'object' && amountPaidData !== null
+                                  ? (Number(amountPaidData[quarterKey]) || 0)
+                                  : (Number(amountPaidData) || 0);
+                                
+                                // Debug: Log payment data being passed
+                                console.log('🔍 [Table] Payment control data for', item.id, {
+                                  key,
+                                  quarterKey,
+                                  value,
+                                  paymentStatusData,
+                                  amountPaidData,
+                                  extractedPaymentStatus: paymentStatus,
+                                  extractedAmountPaid: amountPaid,
+                                });
+                                
+                                return (
+                                  <PaymentStatusControl
+                                    expenseCode={item.id}
+                                    amount={value ?? 0}
+                                    paymentStatus={paymentStatus as PaymentStatus}
+                                    amountPaid={amountPaid}
+                                    onChange={(status, amountPaid) => ctx.updateExpensePayment(item.id, status, amountPaid)}
+                                    disabled={!editable}
+                                  />
+                                );
+                              })()}
                             </div>
                           ) : (
                             <span className={cn(locked && "text-gray-400")}>{formatValue(value)}</span>
