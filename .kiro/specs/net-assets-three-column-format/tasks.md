@@ -167,8 +167,29 @@
   - Test with templates without columnType metadata
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 8. Update database with new template
+- [x] 8. Add calculation formulas for balance lines
+- [x] 8.1 Add opening balance calculation formula
+  - Update BALANCES_JUNE_PREV line to include calculationFormula: 'TOTAL_NET_ASSETS'
+  - Ensure opening balance pulls from previous period's total net assets
+  - _Requirements: 9.1, 9.2, 9.3_
+
+- [x] 8.2 Add closing balance calculation formula
+  - Update BALANCE_JUNE_CURRENT line to include calculationFormula with SUM of all adjustment lines
+  - Include: BALANCES_JUNE_PREV, CASH_EQUIVALENT_PREV_CURRENT, RECEIVABLES_PREV_CURRENT, INVESTMENTS_PREV_CURRENT, PAYABLES_PREV_CURRENT, BORROWING_PREV_CURRENT, NET_SURPLUS_PREV_CURRENT
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [x] 8.3 Add carryforward balance calculation formula
+  - Update BALANCE_JULY_CURRENT line to include calculationFormula: 'BALANCE_JUNE_CURRENT'
+  - Ensure new fiscal year opening balance equals previous fiscal year closing balance
+  - _Requirements: 11.1, 11.2, 11.3, 11.4_
+
+- [x] 8.4 Add final closing balance calculation formula
+  - Update BALANCE_PERIOD_END line to include calculationFormula with SUM of current year opening balance and all current year adjustments
+  - Include: BALANCE_JULY_CURRENT, CASH_EQUIVALENT_CURRENT_NEXT, RECEIVABLES_CURRENT_NEXT, INVESTMENTS_CURRENT_NEXT, PAYABLES_CURRENT_NEXT, BORROWING_CURRENT_NEXT, NET_SURPLUS_CURRENT_NEXT
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+- [ ] 9. Update database with new template
   - Run database seed command to update statement templates
   - Verify templates are updated in database
   - Test statement generation with updated templates
-  - _Requirements: 3.1, 8.1, 8.2, 8.3, 8.4, 8.5_
+  - _Requirements: 3.1, 8.1, 8.2, 8.3, 8.4, 8.5, 9.1, 9.2, 9.3_

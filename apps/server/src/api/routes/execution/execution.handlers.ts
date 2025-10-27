@@ -2,10 +2,14 @@ import { eq, and, sql } from "drizzle-orm";
 import * as HttpStatusCodes from "stoker/http-status-codes";
 
 import { db } from "@/api/db";
-import { schemaFormDataEntries, dynamicActivities, schemaActivityCategories, formSchemas, facilities, projects, reportingPeriods } from "@/api/db/schema";
+import { schemaFormDataEntries, dynamicActivities, schemaActivityCategories, formSchemas, facilities, projects, reportingPeriods, districts, provinces } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 import { getUserContext, canAccessFacility, hasAdminAccess } from "@/api/lib/utils/get-user-facility";
 import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
+import { buildScopeFilter } from "@/lib/utils/scope-filters";
+import { validateScopeAccess } from "@/lib/utils/scope-access-control";
+import { buildScopeMetadata } from "@/lib/utils/scope-metadata";
+import { buildFacilityColumns, buildDistrictColumns, buildProvinceColumns, aggregateDataByColumns, columnsToFacilityColumns } from "@/lib/utils/column-builders";
 
 import { computationService } from "@/api/lib/services/computation.service";
 import { validationService } from "@/api/lib/services/validation.service";
@@ -2166,11 +2170,14 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
 
 export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
   try {
-    // Task 3.1: Add query parameter validation and filtering
+    // Get user context and parse query parameters
     const userContext = await getUserContext(c);
     const query = compiledExecutionQuerySchema.parse(c.req.query());
 
+    // Task 5.1: Parse scope from query parameters with default 'district'
     const {
+      scope = 'district',
+      provinceId,
       projectType,
       facilityType,
       reportingPeriodId,
@@ -2179,45 +2186,76 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       districtId
     } = query;
 
+    // Task 5.2: Integrate access control validation
+    const accessCheck = validateScopeAccess(scope, userContext, { scope, districtId, provinceId });
+    if (!accessCheck.allowed) {
+      return c.json({
+        data: {
+          facilities: [],
+          activities: [],
+          sections: [],
+          totals: { byFacility: {}, grandTotal: 0 }
+        },
+        meta: {
+          filters: {
+            projectType,
+            facilityType,
+            reportingPeriodId,
+            year,
+            quarter,
+            districtId
+          },
+          aggregationDate: new Date().toISOString(),
+          facilityCount: 0,
+          reportingPeriod: year ? year.toString() : 'All periods',
+          scope,
+          scopeDetails: undefined,
+          performanceWarning: undefined
+        },
+        message: accessCheck.message
+      }, HttpStatusCodes.FORBIDDEN);
+    }
+
     // Build database query conditions based on provided filters
     let whereConditions: any[] = [
       eq(schemaFormDataEntries.entityType, 'execution')
     ];
 
-    // Add district-based facility filter using buildFacilityFilter utility
+    // Task 5.3: Replace facility filtering logic with scope filter
     try {
-      const facilityFilter = buildFacilityFilter(userContext, undefined);
+      const scopeFilter = await buildScopeFilter(scope, userContext, { scope, districtId, provinceId });
 
-      if (facilityFilter) {
-        whereConditions.push(facilityFilter);
+      if (scopeFilter) {
+        whereConditions.push(scopeFilter);
       }
     } catch (error: any) {
-      // buildFacilityFilter throws error if user requests facility outside their district
-      if (error.message === "Access denied: facility not in your district") {
-        return c.json({
-          data: {
-            facilities: [],
-            activities: [],
-            sections: [],
-            totals: { byFacility: {}, grandTotal: 0 }
+      // Handle filter builder errors with 400 Bad Request response
+      return c.json({
+        data: {
+          facilities: [],
+          activities: [],
+          sections: [],
+          totals: { byFacility: {}, grandTotal: 0 }
+        },
+        meta: {
+          filters: {
+            projectType,
+            facilityType,
+            reportingPeriodId,
+            year,
+            quarter,
+            districtId
           },
-          meta: {
-            filters: {
-              projectType,
-              facilityType,
-              reportingPeriodId,
-              year,
-              quarter,
-              districtId
-            },
-            aggregationDate: new Date().toISOString(),
-            facilityCount: 0,
-            reportingPeriod: year ? year.toString() : 'All periods'
-          },
-          message: "Access denied: facility not in your district"
-        }, HttpStatusCodes.FORBIDDEN);
-      }
-      throw error; // Re-throw unexpected errors
+          aggregationDate: new Date().toISOString(),
+          facilityCount: 0,
+          reportingPeriod: year ? year.toString() : 'All periods',
+          scope,
+          scopeDetails: undefined,
+          performanceWarning: undefined
+        },
+        message: error.message || "Invalid scope configuration",
+        error: "Failed to build scope filter"
+      }, HttpStatusCodes.BAD_REQUEST);
     }
 
     // Apply direct ID filters
@@ -2226,18 +2264,22 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
     }
 
     // Task 3.2: Create database query logic
-    // Write optimized query to fetch execution data with facility and project joins
+    // Write optimized query to fetch execution data with facility, project, district, and province joins
     const baseQuery = db
       .select({
         entry: schemaFormDataEntries,
         facility: facilities,
         project: projects,
         reportingPeriod: reportingPeriods,
+        district: districts,
+        province: provinces,
       })
       .from(schemaFormDataEntries)
       .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
       .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
       .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
+      .leftJoin(districts, eq(facilities.districtId, districts.id))
+      .leftJoin(provinces, eq(districts.provinceId, provinces.id))
       .where(and(...whereConditions));
 
     // Execute query with error handling for database connection and query failures
@@ -2287,35 +2329,6 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       });
     }
 
-    // Additional district filter validation (for admin users who may specify districtId)
-    if (districtId && !hasAdminAccess(userContext.role, userContext.permissions)) {
-      // Non-admin users cannot request data from other districts
-      if (userContext.districtId && districtId !== userContext.districtId) {
-        return c.json({
-          data: {
-            facilities: [],
-            activities: [],
-            sections: [],
-            totals: { byFacility: {}, grandTotal: 0 }
-          },
-          meta: {
-            filters: {
-              projectType,
-              facilityType,
-              reportingPeriodId,
-              year,
-              quarter,
-              districtId
-            },
-            aggregationDate: new Date().toISOString(),
-            facilityCount: 0,
-            reportingPeriod: year ? year.toString() : 'All periods'
-          },
-          message: "Access denied: cannot access data from other districts"
-        }, HttpStatusCodes.FORBIDDEN);
-      }
-    }
-
     // Check if no execution data exists for given filters
     if (filteredResults.length === 0) {
       return c.json({
@@ -2336,7 +2349,10 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
           },
           aggregationDate: new Date().toISOString(),
           facilityCount: 0,
-          reportingPeriod: year ? year.toString() : 'All periods'
+          reportingPeriod: year ? year.toString() : 'All periods',
+          scope,
+          scopeDetails: undefined,
+          performanceWarning: undefined
         }
       }, HttpStatusCodes.OK);
     }
@@ -2352,7 +2368,11 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       facilityType: r.facility?.facilityType || 'unknown',
       projectType: r.project?.projectType || 'unknown',
       year: r.reportingPeriod?.year,
-      quarter: (r.entry.metadata as any)?.quarter
+      quarter: (r.entry.metadata as any)?.quarter,
+      districtId: r.district?.id,
+      districtName: r.district?.name,
+      provinceId: r.province?.id,
+      provinceName: r.province?.name
     }));
 
     // Implement activity catalog loading with proper filtering
@@ -2450,8 +2470,39 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
         console.warn('Data cleaning warnings:', warnings);
       }
 
-      // Aggregate data by activity
-      const aggregatedData = aggregationService.aggregateByActivity(cleanedData, activityCatalog);
+      // Task: Build hierarchical columns based on scope
+      let columns;
+      let aggregatedExecutionData;
+
+      switch (scope) {
+        case 'district':
+          // Individual facility columns
+          columns = buildFacilityColumns(cleanedData);
+          aggregatedExecutionData = cleanedData;
+          break;
+
+        case 'provincial':
+          // District hospital columns (pre-aggregated with child HCs)
+          columns = await buildDistrictColumns(cleanedData);
+          aggregatedExecutionData = aggregateDataByColumns(cleanedData, columns);
+          break;
+
+        case 'country':
+          // Province columns (pre-aggregated with all facilities)
+          columns = await buildProvinceColumns(cleanedData);
+          aggregatedExecutionData = aggregateDataByColumns(cleanedData, columns);
+          break;
+
+        default:
+          columns = buildFacilityColumns(cleanedData);
+          aggregatedExecutionData = cleanedData;
+      }
+
+      // Convert columns to FacilityColumn format for response
+      const facilityColumns: FacilityColumn[] = columnsToFacilityColumns(columns);
+
+      // Aggregate data by activity using the aggregated execution data
+      const aggregatedData = aggregationService.aggregateByActivity(aggregatedExecutionData, activityCatalog);
 
       // Calculate computed values
       const computedValues = aggregationService.calculateComputedValues(aggregatedData, activityCatalog);
@@ -2463,16 +2514,6 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
         activityCatalog,
         subcategoryNames
       );
-
-      // Task 3.3: Build response formatting
-      // Structure aggregated data into facilities-as-columns format
-      const facilityColumns: FacilityColumn[] = cleanedData.map(entry => ({
-        id: entry.facilityId,
-        name: entry.facilityName,
-        facilityType: entry.facilityType,
-        projectType: entry.projectType,
-        hasData: true
-      }));
 
       // Create activity rows with proper hierarchy and computed value indicators
       const activityRowsForResponse: ActivityRow[] = activityRows;
@@ -2520,6 +2561,15 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
         districtId
       };
 
+      // Task 5.4: Add scope metadata to response
+      const scopeDetails = await buildScopeMetadata(scope, { scope, districtId, provinceId }, filteredResults);
+
+      // Task 5.5: Add performance warning logic
+      let performanceWarning: string | undefined;
+      if (scope === 'country' && facilityColumns.length > 100) {
+        performanceWarning = "Large dataset: Consider using filters to improve performance";
+      }
+
       const response: CompiledExecutionResponse = {
         data: {
           facilities: facilityColumns,
@@ -2531,7 +2581,10 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
           filters: appliedFilters,
           aggregationDate: new Date().toISOString(),
           facilityCount: facilityColumns.length,
-          reportingPeriod: year ? year.toString() : reportingPeriodId ? `Period ${reportingPeriodId}` : 'All periods'
+          reportingPeriod: year ? year.toString() : reportingPeriodId ? `Period ${reportingPeriodId}` : 'All periods',
+          scope,
+          scopeDetails,
+          performanceWarning
         }
       };
 

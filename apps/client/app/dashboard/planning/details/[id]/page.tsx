@@ -3,17 +3,24 @@
 import { useParams, useRouter } from "next/navigation";
 import { EnhancedPlanningForm } from "@/features/planning/v3/enhanced-planning-form";
 import { usePlanningDetail } from "@/hooks/queries/planning/use-get-planning-details";
-import { Loader2, ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ApprovalStatusSection } from "@/components/planning/approval-status-section";
+import { ApprovalActionsCard } from "@/components/planning/approval-actions-card";
+import type { ApprovalStatus } from "@/types/planning-approval";
 
 export default function PlanningDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const planningId = params.id as string;
 
-  const { data: planning, isLoading, error } = usePlanningDetail(planningId);
+  const { data: planning, isLoading, error, refetch } = usePlanningDetail(planningId);
+  
+  const handleRefresh = () => {
+    refetch();
+  };
 
   if (!planningId) {
     router.push("/dashboard/planning");
@@ -130,6 +137,24 @@ export default function PlanningDetailsPage() {
               View planning activities and budget information
             </p>
           </div>
+        </div>
+
+        {/* Approval Status and Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <ApprovalStatusSection
+            approvalStatus={(planning.approvalStatus as ApprovalStatus) || "DRAFT"}
+            reviewedBy={planning.reviewedBy}
+            reviewedByName={planning.reviewedByName}
+            reviewedAt={planning.reviewedAt}
+            reviewComments={planning.reviewComments}
+            reviewer={planning.reviewer}
+          />
+          
+          <ApprovalActionsCard
+            planningId={Number(planningId)}
+            approvalStatus={(planning.approvalStatus as ApprovalStatus) || "DRAFT"}
+            onRefresh={handleRefresh}
+          />
         </div>
 
         <EnhancedPlanningForm

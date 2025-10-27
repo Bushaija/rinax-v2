@@ -9,6 +9,8 @@ import { getCurrentFiscalYear } from '@/features/execution/utils';
 import useGenerateStatement from '@/hooks/mutations/financial-reports/use-generate-statement';
 import { useToast } from '@/hooks/use-toast';
 import { transformBudgetVsActualData } from '../utils/transform-statement-data';
+import { FacilitySelectorWithAll } from '@/components/facility-selector-with-all';
+import { Label } from '@/components/ui/label';
 
 // Project configuration
 const projectTabs: FilterTab[] = [
@@ -30,7 +32,17 @@ const projectTabs: FilterTab[] = [
 ]
 
 // Tab Content Component that handles loading state
-const TabContent = ({ tabValue, periodId, facilityId }: { tabValue: string; periodId: number; facilityId?: number }) => {
+const TabContent = ({ 
+  tabValue, 
+  periodId, 
+  facilityId,
+  aggregationLevel 
+}: { 
+  tabValue: string; 
+  periodId: number; 
+  facilityId?: number | "all";
+  aggregationLevel: "FACILITY" | "DISTRICT" | "PROVINCE";
+}) => {
   const [statementData, setStatementData] = useState<any>(null);
   const { toast } = useToast();
 
@@ -61,22 +73,77 @@ const TabContent = ({ tabValue, periodId, facilityId }: { tabValue: string; peri
         statementCode: "BUDGET_VS_ACTUAL",
         reportingPeriodId: periodId,
         projectType: projectTypeMapping[tabValue],
-        facilityId: facilityId,
+        facilityId: facilityId === "all" ? undefined : facilityId,
+        aggregationLevel: facilityId === "all" ? aggregationLevel : "FACILITY",
+        includeFacilityBreakdown: facilityId === "all",
         includeComparatives: true,
         customMappings: {}, // Add empty custom mappings as per API
       });
     }
-  }, [periodId, tabValue, facilityId, generateStatement]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodId, tabValue, facilityId, aggregationLevel]);
 
   if (isPending || !statementData) {
     return <ReportSkeleton />
   }
 
   if (isError) {
+    // Check if it's a "no data" error (404)
+    const isNoDataError = error?.message?.includes('No data available') || 
+                          error?.message?.includes('404') ||
+                          error?.message?.includes('not found');
+    
+    if (isNoDataError) {
+      return (
+        <div className="bg-amber-50 p-6 rounded-lg border border-amber-200">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-amber-800 font-medium mb-1">No Data Available</h3>
+              <p className="text-amber-700 text-sm mb-3">
+                {facilityId === "all" 
+                  ? `No budget or expenditure data found for ${tabValue.toUpperCase()} in the selected facilities for this reporting period.`
+                  : `The selected facility has no budget or expenditure data for ${tabValue.toUpperCase()} in this reporting period.`
+                }
+              </p>
+              <div className="text-amber-700 text-sm">
+                <p className="font-medium mb-1">Possible reasons:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li>Budget has not been planned for this period</li>
+                  <li>Expenditure has not been recorded yet</li>
+                  <li>Data entry is still in progress</li>
+                  {facilityId !== "all" && <li>Try selecting "All Facilities" to see district-wide data</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Generic error for other types of errors
     return (
-      <div className="bg-white p-6 rounded-lg border border-red-200">
-        <div className="text-red-600 font-medium">Failed to load budget vs actual report for {tabValue.toUpperCase()}</div>
-        <div className="text-red-500 text-sm mt-2">{error?.message}</div>
+      <div className="bg-red-50 p-6 rounded-lg border border-red-200">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-red-800 font-medium mb-1">Failed to Load Report</h3>
+            <p className="text-red-700 text-sm mb-2">
+              Unable to generate the budget vs actual report for {tabValue.toUpperCase()}.
+            </p>
+            <p className="text-red-600 text-sm font-mono bg-red-100 p-2 rounded">
+              {error?.message || "An unexpected error occurred"}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -89,7 +156,8 @@ const TabContent = ({ tabValue, periodId, facilityId }: { tabValue: string; peri
 
 export default function BudgetVsActualPage() {
   const [selectedTab, setSelectedTab] = useState('hiv')
-  const [selectedFacilityId, setSelectedFacilityId] = useState<number | undefined>(20) // Default facility
+  const [selectedFacilityId, setSelectedFacilityId] = useState<number | "all">("all") // Default to "All"
+  const [aggregationLevel, setAggregationLevel] = useState<"FACILITY" | "DISTRICT" | "PROVINCE">("DISTRICT")
   const reportContentRef = useRef<HTMLDivElement>(null!)
   
   // For now, use a hardcoded period ID
@@ -99,7 +167,12 @@ export default function BudgetVsActualPage() {
   // Create tabs with content that handles its own loading state
   const tabsWithContent = projectTabs.map(tab => ({
     ...tab,
-    content: <TabContent tabValue={tab.value} periodId={periodId} facilityId={selectedFacilityId} />
+    content: <TabContent 
+      tabValue={tab.value} 
+      periodId={periodId} 
+      facilityId={selectedFacilityId}
+      aggregationLevel={aggregationLevel}
+    />
   }))
 
   const currentEndingYear = getCurrentFiscalYear();
@@ -115,9 +188,28 @@ export default function BudgetVsActualPage() {
             contentRef={reportContentRef}
             period={currentEndingYear}
             reportingPeriodId={periodId}
-            facilityId={selectedFacilityId}
+            facilityId={selectedFacilityId === "all" ? undefined : selectedFacilityId}
           />
         
+          {/* Facility Filter */}
+          <div className="px-6 py-4 border-b bg-gray-50">
+            <div className="max-w-md">
+              <Label htmlFor="facility-selector" className="text-sm font-medium mb-2 block">
+                Health Facility
+              </Label>
+              <FacilitySelectorWithAll
+                value={selectedFacilityId}
+                onChange={setSelectedFacilityId}
+                aggregationLevel={aggregationLevel}
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {selectedFacilityId === "all" 
+                  ? `Showing aggregated data for all facilities at ${aggregationLevel.toLowerCase()} level`
+                  : "Showing data for selected facility"}
+              </p>
+            </div>
+          </div>
+
           {/* 2. Filter Tabs - Always visible */}
           <FilterTabs
             tabs={tabsWithContent}

@@ -6,15 +6,24 @@ import PDFDocument from "pdfkit";
 import { db } from "@/api/db";
 import {
   financialReports,
-  projects
+  projects,
+  financialReportWorkflowLogs
 } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 import type {
   ListRoute,
   GetOneRoute,
+  PatchRoute,
   RemoveRoute,
   GenerateStatementRoute,
+  SubmitForApprovalRoute,
+  DafApproveRoute,
+  DafRejectRoute,
+  DgApproveRoute,
+  DgRejectRoute,
+  GetWorkflowLogsRoute,
 } from "./financial-reports.routes";
+import { financialReportWorkflowService } from "./financial-reports-workflow.service";
 import { financialReportListRequestSchema } from "./financial-reports.types";
 import { TemplateEngine } from "@/lib/statement-engine/engines/template-engine";
 import { DataAggregationEngine } from "@/lib/statement-engine/engines/data-aggregation-engine";
@@ -25,8 +34,8 @@ import {
   StatementLine,
   FinancialStatementResponse
 } from "@/lib/statement-engine/types/core.types";
-import { reportingPeriods, facilities } from "@/api/db/schema";
-import { getUserContext, canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { reportingPeriods, facilities, districts, provinces } from "@/api/db/schema";
+import { getUserContext, canAccessFacility, type UserContext } from "@/lib/utils/get-user-facility";
 import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
 import { BudgetVsActualProcessor } from "./budget-vs-actual-processor";
 import { CarryforwardService } from "@/lib/statement-engine/services/carryforward-service";
@@ -44,6 +53,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       facilityId: query.facilityId ? parseInt(query.facilityId) : undefined,
       fiscalYear: query.fiscalYear,
       reportType: query.reportType as any,
+      status: query.status as any,
       createdBy: query.createdBy ? parseInt(query.createdBy) : undefined,
       fromDate: query.fromDate,
       toDate: query.toDate,
@@ -56,6 +66,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       facilityId,
       fiscalYear,
       reportType,
+      status,
       createdBy,
       fromDate,
       toDate,
@@ -91,6 +102,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     if (projectId) conditions.push(eq(financialReports.projectId, projectId));
     if (fiscalYear) conditions.push(eq(financialReports.fiscalYear, fiscalYear));
     if (reportType) conditions.push(eq(financialReports.metadata, sql`metadata->>'statementCode' = ${reportType}`));
+    if (status) conditions.push(eq(financialReports.status, status));
     if (createdBy) conditions.push(eq(financialReports.createdBy, createdBy));
     if (fromDate) conditions.push(gte(financialReports.createdAt, new Date(fromDate)));
     if (toDate) conditions.push(lte(financialReports.createdAt, new Date(toDate)));
@@ -112,12 +124,37 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
           },
           reportingPeriod: true,
           creator: true,
+          dafApprover: true,
+          dgApprover: true,
         },
       }),
       db.$count(financialReports,
         conditions.length > 0 ? and(...conditions) : undefined
       ),
     ]);
+
+    // Get workflow log counts for each report
+    const reportIds = reports.map(r => r.id);
+    const workflowLogCounts = reportIds.length > 0 ? await db
+      .select({
+        reportId: financialReportWorkflowLogs.reportId,
+        count: sql<number>`count(*)::int`.as('count'),
+      })
+      .from(financialReportWorkflowLogs)
+      .where(sql`${financialReportWorkflowLogs.reportId} IN (${sql.join(reportIds.map(id => sql`${id}`), sql`, `)})`)
+      .groupBy(financialReportWorkflowLogs.reportId)
+      : [];
+
+    // Create a map of report ID to workflow log count
+    const workflowLogCountMap = new Map(
+      workflowLogCounts.map(item => [item.reportId, item.count])
+    );
+
+    // Add workflow log count to each report
+    const reportsWithWorkflowLogCount = reports.map(report => ({
+      ...report,
+      workflowLogCount: workflowLogCountMap.get(report.id) || 0,
+    }));
 
     // Generate summary statistics
     const [typeCounts, fiscalYearCounts, projectCounts] = await Promise.all([
@@ -157,7 +194,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     };
 
     return c.json({
-      reports,
+      reports: reportsWithWorkflowLogCount,
       pagination: {
         page,
         limit,
@@ -253,6 +290,114 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
   }
 };
 
+export const patch: AppRouteHandler<PatchRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context with district information
+    const userContext = await getUserContext(c);
+
+    // First, fetch the report to check its facility and lock status
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate that the user can access this report's facility
+    const recordFacilityId = report.facilityId;
+    const hasAccess = canAccessFacility(recordFacilityId, userContext);
+
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Check if report is locked (Requirement 6.5)
+    if (report.locked) {
+      return c.json(
+        { 
+          message: "Cannot edit locked report. This report is currently under review or has been approved.",
+          error: "Report is locked"
+        },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Parse and validate update data
+    const body = await c.req.json();
+
+    // Prevent updating locked field directly through this endpoint
+    if ('locked' in body) {
+      delete body.locked;
+    }
+
+    // Update the report
+    const updatedReports = await db.update(financialReports)
+      .set({
+        ...body,
+        updatedBy: userContext.userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(financialReports.id, reportId))
+      .returning();
+
+    if (updatedReports.length === 0) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Fetch the updated report with relations
+    const updatedReport = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+      with: {
+        project: true,
+        facility: {
+          with: {
+            district: true,
+          },
+        },
+        reportingPeriod: true,
+        creator: true,
+        updater: true,
+        submitter: true,
+        approver: true,
+        dafApprover: true,
+        dgApprover: true,
+      },
+    });
+
+    return c.json(updatedReport, HttpStatusCodes.OK);
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to update financial report", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
 export const remove: AppRouteHandler<RemoveRoute> = async (c) => {
   const { id } = c.req.param();
   const reportId = parseInt(id);
@@ -323,7 +468,6 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
   try {
     // Get user context with district information
     const userContext = await getUserContext(c);
-    const facilityId = userContext.facilityId;
 
     // Parse and validate request body
     requestBody = await c.req.json();
@@ -331,40 +475,54 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       statementCode,
       reportingPeriodId,
       projectType,
-      // facilityId,
+      facilityId: requestedFacilityId, // NEW: Extract facilityId from request (optional)
+      aggregationLevel = 'DISTRICT', // NEW: Default to district (Subtask 5.1)
+      includeFacilityBreakdown = false, // NEW: Default to false (Subtask 5.1)
       includeComparatives = true,
       customMappings = {}
     } = requestBody;
 
-    // Add district-based facility filter using buildFacilityFilter utility
-    let effectiveFacilityIds: number[] | undefined;
+    // NEW: Integrate aggregation level determination (Subtask 5.2)
+    // Determine effective facility IDs based on aggregation level
+    let effectiveFacilityIds: number[];
     try {
-      const facilityFilter = buildFacilityFilter(userContext, facilityId);
-
-      // If there's a facility filter, we need to determine the effective facility IDs
-      if (facilityFilter) {
-        // For financial statements, always aggregate ALL accessible facilities in the district
-        // This ensures district accountants see consolidated reports from all health centers
-        effectiveFacilityIds = userContext.accessibleFacilityIds;
-      } else {
-        // Admin user with no specific facility - access all facilities
-        effectiveFacilityIds = undefined;
-      }
+      effectiveFacilityIds = await determineEffectiveFacilityIds(
+        aggregationLevel,
+        requestedFacilityId,
+        userContext
+      );
     } catch (error: any) {
-
-      // buildFacilityFilter throws error if user requests facility outside their district
-      if (error.message === "Access denied: facility not in your district") {
+      // Handle validation errors and access control failures (Subtask 5.2)
+      if (error.message === 'facilityId is required when aggregationLevel is FACILITY') {
         return c.json({
-          message: 'Access denied: facility not in your district',
+          message: error.message,
           context: {
-            facilityId,
+            aggregationLevel,
+            statementCode,
+            reportingPeriodId
+          }
+        }, HttpStatusCodes.BAD_REQUEST);
+      }
+      
+      if (error.message === 'Access denied to facility') {
+        return c.json({
+          message: 'Access denied to facility',
+          context: {
+            facilityId: requestedFacilityId,
+            aggregationLevel,
             statementCode,
             reportingPeriodId
           }
         }, HttpStatusCodes.FORBIDDEN);
       }
-      throw error; // Re-throw unexpected errors
+      
+      // Re-throw unexpected errors
+      throw error;
     }
+    
+    // For backward compatibility, use the first facility ID as the primary facilityId
+    // This maintains compatibility with existing code that expects a single facilityId
+    const primaryFacilityId = effectiveFacilityIds.length > 0 ? effectiveFacilityIds[0] : userContext.facilityId;
 
     // Initialize the three engines
     const templateEngine = new TemplateEngine(db);
@@ -393,11 +551,12 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       }, HttpStatusCodes.NOT_FOUND);
     }
 
-    // Step 5: Set up data filters with correct project ID and district-based access control
+    // Step 5: Set up data filters with effective facility IDs (Subtask 5.2)
+    // Use effectiveFacilityIds determined by aggregation level
     const dataFilters: DataFilters = {
       projectId: project.id, // Use the actual project ID for the project type
-      facilityId, // Keep for backward compatibility with single facility queries
-      facilityIds: effectiveFacilityIds, // Add array of accessible facilities for district filtering
+      facilityId: primaryFacilityId, // Keep for backward compatibility with single facility queries
+      facilityIds: effectiveFacilityIds, // Use effectiveFacilityIds from aggregation level determination
       reportingPeriodId,
       projectType,
       entityTypes: statementCode === 'BUDGET_VS_ACTUAL'
@@ -406,6 +565,8 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
     };
 
     // Step 6: Collect event data with district-based access control
+    // Track data collection time for performance logging (Requirement 8.4)
+    const dataCollectionStartTime = Date.now();
     const eventData = await dataEngine.collectEventData(dataFilters, eventCodes);
 
     // For BUDGET_VS_ACTUAL, we need separate aggregations for PLANNING and EXECUTION
@@ -425,13 +586,46 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
 
       // Budget vs Actual processing will be handled later after variables are declared
     }
+    
+    const dataCollectionTime = Date.now() - dataCollectionStartTime;
+    
+    // Log data collection performance by aggregation level (Requirement 8.4)
+    console.log(`[Performance] Data collection - Aggregation: ${aggregationLevel}, ` +
+                `Facilities: ${effectiveFacilityIds.length}, Time: ${dataCollectionTime}ms`);
 
-    // Check if facilities have data and handle gracefully
-    let facilityDataWarnings: string[] = [];
-    if (facilityId) {
+    // Task 6: Validate facility data completeness (Subtask 6.2)
+    // Call validation after data collection
+    const facilityValidation = await validateFacilityDataCompleteness(
+      aggregationLevel,
+      effectiveFacilityIds,
+      planningData,
+      executionData,
+      reportingPeriodId
+    );
+    
+    // Return error response for critical validation failures
+    if (facilityValidation.errors.length > 0) {
+      return c.json({
+        message: 'Facility data validation failed',
+        errors: facilityValidation.errors,
+        warnings: facilityValidation.warnings,
+        context: {
+          aggregationLevel,
+          facilityIds: effectiveFacilityIds,
+          statementCode,
+          reportingPeriodId
+        }
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+    
+    // Include warnings in validation results
+    let facilityDataWarnings: string[] = [...facilityValidation.warnings];
+    
+    // Check if facilities have data and handle gracefully (legacy check)
+    if (primaryFacilityId) {
       const facilitiesWithData = eventData.metadata.facilitiesIncluded;
       if (facilitiesWithData.length === 0) {
-        facilityDataWarnings.push(`Facility ${facilityId} has no data for the specified period and criteria`);
+        facilityDataWarnings.push(`Facility ${primaryFacilityId} has no data for the specified period and criteria`);
       }
     }
 
@@ -442,7 +636,7 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
 
       carryforwardResult = await carryforwardService.getBeginningCash({
         reportingPeriodId,
-        facilityId,
+        facilityId: primaryFacilityId,
         facilityIds: effectiveFacilityIds,
         projectType,
         statementCode
@@ -476,7 +670,7 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
 
     // Get facility aggregation information if multiple facilities are involved
     let facilityAggregationInfo = undefined;
-    if (eventData.metadata.facilitiesIncluded.length > 1 || (!facilityId && eventData.metadata.facilitiesIncluded.length > 0)) {
+    if (eventData.metadata.facilitiesIncluded.length > 1 || (!primaryFacilityId && eventData.metadata.facilitiesIncluded.length > 0)) {
       facilityAggregationInfo = await generateFacilityAggregationInfo(
         eventData.metadata.facilitiesIncluded,
         aggregatedData,
@@ -968,10 +1162,10 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
     }
 
     let facilityInfo = undefined;
-    if (facilityId) {
+    if (primaryFacilityId) {
       // Get facility info with data availability check
-      const facilityInfoMap = await dataEngine.getFacilityInfo([facilityId]);
-      const facilityData = facilityInfoMap.get(facilityId);
+      const facilityInfoMap = await dataEngine.getFacilityInfo([primaryFacilityId]);
+      const facilityData = facilityInfoMap.get(primaryFacilityId);
 
       if (facilityData) {
         facilityInfo = {
@@ -984,7 +1178,7 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       } else {
         // Fallback to direct database query if facility info not found
         const facility = await db.query.facilities.findFirst({
-          where: eq(facilities.id, facilityId),
+          where: eq(facilities.id, primaryFacilityId),
           with: {
             district: true
           }
@@ -1011,7 +1205,7 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
         planningData,
         executionData,
         {
-          facilityId,
+          facilityId: primaryFacilityId,
           reportingPeriodId,
           projectType,
           customMappings
@@ -1030,6 +1224,42 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
           district: facilityInfo.district
         } : undefined
       );
+
+      // NEW: Build aggregation metadata for Budget vs Actual (Subtask 5.3)
+      // Track aggregation metadata generation time (Requirement 8.5)
+      const aggregationMetadataStartTime = Date.now();
+      const aggregationMetadata = await buildAggregationMetadata(
+        aggregationLevel,
+        effectiveFacilityIds,
+        planningData,
+        executionData
+      );
+      const aggregationMetadataTime = Date.now() - aggregationMetadataStartTime;
+      
+      // Log aggregation metadata generation time (Requirement 8.5)
+      console.log(`[Performance] Aggregation metadata generation - Time: ${aggregationMetadataTime}ms`);
+
+      // NEW: Generate facility breakdown if requested (Subtask 5.4)
+      // Only generate breakdown when includeFacilityBreakdown is true
+      // Skip breakdown for FACILITY aggregation level (redundant)
+      // Include breakdown for DISTRICT and PROVINCE levels
+      let facilityBreakdown: any[] | undefined;
+      let facilityBreakdownTime = 0;
+      
+      if (includeFacilityBreakdown && aggregationLevel !== 'FACILITY') {
+        // Track facility breakdown generation time (Requirement 8.5)
+        const facilityBreakdownStartTime = Date.now();
+        facilityBreakdown = await generateFacilityBreakdown(
+          effectiveFacilityIds,
+          planningData,
+          executionData
+        );
+        facilityBreakdownTime = Date.now() - facilityBreakdownStartTime;
+        
+        // Log facility breakdown generation time (Requirement 8.5)
+        console.log(`[Performance] Facility breakdown generation - Facilities: ${effectiveFacilityIds.length}, ` +
+                    `Time: ${facilityBreakdownTime}ms`);
+      }
 
       // Return Budget vs Actual response with new format
       const processingTime = Date.now() - startTime;
@@ -1069,8 +1299,16 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
           processingTimeMs: processingTime,
           linesProcessed: budgetVsActualStatement.lines.length,
           eventsProcessed: eventData.metadata.totalEvents,
-          formulasCalculated: budgetVsActualStatement.lines.filter(l => l.metadata.isComputed).length
-        }
+          formulasCalculated: budgetVsActualStatement.lines.filter(l => l.metadata.isComputed).length,
+          // NEW: Performance metrics for aggregation levels (Requirement 8.4, 8.5)
+          aggregationLevel,
+          dataCollectionTimeMs: dataCollectionTime,
+          aggregationMetadataTimeMs: aggregationMetadataTime,
+          facilityBreakdownTimeMs: facilityBreakdownTime
+        },
+        // NEW: Add aggregation metadata and facility breakdown
+        aggregationMetadata,
+        facilityBreakdown
       };
 
       return c.json(response, HttpStatusCodes.OK);
@@ -1122,6 +1360,42 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       };
     }
 
+    // NEW: Build aggregation metadata for standard statements (Subtask 5.3)
+    // Track aggregation metadata generation time (Requirement 8.5)
+    const aggregationMetadataStartTime = Date.now();
+    const aggregationMetadata = await buildAggregationMetadata(
+      aggregationLevel,
+      effectiveFacilityIds,
+      planningData,
+      executionData
+    );
+    const aggregationMetadataTime = Date.now() - aggregationMetadataStartTime;
+    
+    // Log aggregation metadata generation time (Requirement 8.5)
+    console.log(`[Performance] Aggregation metadata generation - Time: ${aggregationMetadataTime}ms`);
+
+    // NEW: Generate facility breakdown if requested (Subtask 5.4)
+    // Only generate breakdown when includeFacilityBreakdown is true
+    // Skip breakdown for FACILITY aggregation level (redundant)
+    // Include breakdown for DISTRICT and PROVINCE levels
+    let facilityBreakdown: any[] | undefined;
+    let facilityBreakdownTime = 0;
+    
+    if (includeFacilityBreakdown && aggregationLevel !== 'FACILITY') {
+      // Track facility breakdown generation time (Requirement 8.5)
+      const facilityBreakdownStartTime = Date.now();
+      facilityBreakdown = await generateFacilityBreakdown(
+        effectiveFacilityIds,
+        planningData,
+        executionData
+      );
+      facilityBreakdownTime = Date.now() - facilityBreakdownStartTime;
+      
+      // Log facility breakdown generation time (Requirement 8.5)
+      console.log(`[Performance] Facility breakdown generation - Facilities: ${effectiveFacilityIds.length}, ` +
+                  `Time: ${facilityBreakdownTime}ms`);
+    }
+
     const response: FinancialStatementResponse = {
       statement: {
         statementCode,
@@ -1147,8 +1421,16 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
         processingTimeMs: processingTime,
         linesProcessed: orderedLines.length,
         eventsProcessed: eventData.metadata.totalEvents,
-        formulasCalculated: orderedLines.filter(l => l.metadata.isComputed).length
-      }
+        formulasCalculated: orderedLines.filter(l => l.metadata.isComputed).length,
+        // NEW: Performance metrics for aggregation levels (Requirement 8.4, 8.5)
+        aggregationLevel,
+        dataCollectionTimeMs: dataCollectionTime,
+        aggregationMetadataTimeMs: aggregationMetadataTime,
+        facilityBreakdownTimeMs: facilityBreakdownTime
+      },
+      // NEW: Add aggregation metadata and facility breakdown
+      aggregationMetadata,
+      facilityBreakdown
     };
 
     return c.json(response, HttpStatusCodes.OK);
@@ -1239,7 +1521,389 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
   }
 };
 
+// ============================================================================
+// Aggregation Level Determination Functions (Task 2)
+// ============================================================================
+
+/**
+ * Determine effective facility IDs based on aggregation level
+ * 
+ * This function implements the core logic for determining which facilities
+ * should be included in a financial statement based on the requested aggregation level.
+ * 
+ * @param aggregationLevel - The organizational level for data aggregation
+ * @param facilityId - Optional specific facility ID (required for FACILITY level)
+ * @param userContext - User context with access control information
+ * @returns Promise resolving to array of facility IDs to include in the statement
+ * @throws Error if validation fails or access is denied
+ * 
+ * Requirements: 1.1, 1.3, 1.4, 1.5, 2.1, 2.3, 3.1, 3.2, 3.3, 3.4, 3.5
+ */
+async function determineEffectiveFacilityIds(
+  aggregationLevel: 'FACILITY' | 'DISTRICT' | 'PROVINCE',
+  facilityId: number | undefined,
+  userContext: UserContext
+): Promise<number[]> {
+  
+  switch (aggregationLevel) {
+    case 'FACILITY':
+      // Single facility mode - facilityId is required
+      if (!facilityId) {
+        throw new Error('facilityId is required when aggregationLevel is FACILITY');
+      }
+      
+      // Validate access control - user must have access to the requested facility
+      if (!userContext.accessibleFacilityIds.includes(facilityId)) {
+        throw new Error('Access denied to facility');
+      }
+      
+      return [facilityId];
+    
+    case 'DISTRICT':
+      // District aggregation mode - use all accessible facilities (current behavior)
+      // This returns all facilities the user can access in their district
+      return userContext.accessibleFacilityIds;
+    
+    case 'PROVINCE':
+      // Province aggregation mode - get all facilities in user's province
+      // This requires querying all facilities in the province and filtering by access
+      return await getProvinceFacilityIds(userContext);
+    
+    default:
+      throw new Error(`Invalid aggregation level: ${aggregationLevel}`);
+  }
+}
+
+/**
+ * Get all facility IDs in the user's province that the user can access
+ * 
+ * This function queries the facilities table to find all facilities in the same
+ * province as the user's facility, then filters by the user's accessible facility IDs
+ * to ensure proper access control.
+ * 
+ * @param userContext - User context with facility and access information
+ * @returns Promise resolving to array of facility IDs in the province
+ * 
+ * Requirements: 1.5
+ */
+async function getProvinceFacilityIds(userContext: UserContext): Promise<number[]> {
+  // If user has no district (isolated facility), return only their facility
+  if (!userContext.districtId) {
+    return [userContext.facilityId];
+  }
+  
+  // Get the user's facility to determine their province
+  const userFacility = await db.query.facilities.findFirst({
+    where: eq(facilities.id, userContext.facilityId),
+    with: {
+      district: true
+    }
+  });
+  
+  if (!userFacility || !userFacility.district) {
+    // If facility or district not found, return only user's facility
+    return [userContext.facilityId];
+  }
+  
+  const provinceId = userFacility.district.provinceId;
+  
+  // Query all facilities in the same province
+  const provinceFacilities = await db
+    .select({ id: facilities.id })
+    .from(facilities)
+    .innerJoin(districts, eq(facilities.districtId, districts.id))
+    .where(eq(districts.provinceId, provinceId));
+  
+  const allProvinceFacilityIds = provinceFacilities.map(f => f.id);
+  
+  // Filter by user's accessible facility IDs for access control
+  // This ensures users can only see data from facilities they have access to
+  const accessibleProvinceFacilityIds = allProvinceFacilityIds.filter(id =>
+    userContext.accessibleFacilityIds.includes(id)
+  );
+  
+  return accessibleProvinceFacilityIds;
+}
+
+/**
+ * Build aggregation metadata for the response
+ * 
+ * This function creates comprehensive metadata about the aggregation level,
+ * included facilities, and data completeness statistics. It provides context
+ * for understanding the scope and quality of the aggregated financial data.
+ * 
+ * @param aggregationLevel - The organizational level for data aggregation
+ * @param effectiveFacilityIds - Array of facility IDs included in the aggregation
+ * @param planningData - Aggregated planning data (budget)
+ * @param executionData - Aggregated execution data (actual)
+ * @returns Promise resolving to aggregation metadata object
+ * 
+ * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 6.1, 6.2
+ */
+async function buildAggregationMetadata(
+  aggregationLevel: 'FACILITY' | 'DISTRICT' | 'PROVINCE',
+  effectiveFacilityIds: number[],
+  planningData: any,
+  executionData: any
+): Promise<any> {
+  
+  const metadata: any = {
+    level: aggregationLevel,
+    facilitiesIncluded: effectiveFacilityIds,
+    totalFacilities: effectiveFacilityIds.length,
+    dataCompleteness: {
+      facilitiesWithPlanning: 0,
+      facilitiesWithExecution: 0,
+      facilitiesWithBoth: 0
+    }
+  };
+  
+  // Task 3.2: Calculate data completeness statistics
+  // Analyze planning and execution data to identify facilities with data
+  const facilitiesWithPlanning = new Set<number>();
+  const facilitiesWithExecution = new Set<number>();
+  
+  // Analyze planning data to identify facilities with budget data
+  if (planningData && planningData.facilityTotals) {
+    for (const facilityId of effectiveFacilityIds) {
+      const hasPlanningData = (planningData.facilityTotals.get(facilityId) || 0) > 0;
+      if (hasPlanningData) {
+        facilitiesWithPlanning.add(facilityId);
+      }
+    }
+  }
+  
+  // Analyze execution data to identify facilities with actual data
+  if (executionData && executionData.facilityTotals) {
+    for (const facilityId of effectiveFacilityIds) {
+      const hasExecutionData = (executionData.facilityTotals.get(facilityId) || 0) > 0;
+      if (hasExecutionData) {
+        facilitiesWithExecution.add(facilityId);
+      }
+    }
+  }
+  
+  // Calculate intersection for facilities with both planning and execution data
+  const facilitiesWithBoth = [...facilitiesWithPlanning].filter(id => 
+    facilitiesWithExecution.has(id)
+  );
+  
+  metadata.dataCompleteness.facilitiesWithPlanning = facilitiesWithPlanning.size;
+  metadata.dataCompleteness.facilitiesWithExecution = facilitiesWithExecution.size;
+  metadata.dataCompleteness.facilitiesWithBoth = facilitiesWithBoth.length;
+  
+  // Add level-specific metadata based on aggregation level
+  if (aggregationLevel === 'FACILITY') {
+    // Build facility-level metadata (facilityId, facilityName, facilityType)
+    const facilityId = effectiveFacilityIds[0];
+    const facility = await db.query.facilities.findFirst({
+      where: eq(facilities.id, facilityId)
+    });
+    
+    if (facility) {
+      metadata.facilityId = facility.id;
+      metadata.facilityName = facility.name;
+      metadata.facilityType = facility.facilityType;
+    }
+  } else if (aggregationLevel === 'DISTRICT') {
+    // Build district-level metadata (districtId, districtName)
+    // Get district info from the first facility in the list
+    const facility = await db.query.facilities.findFirst({
+      where: eq(facilities.id, effectiveFacilityIds[0]),
+      with: { district: true }
+    });
+    
+    if (facility?.district) {
+      metadata.districtId = facility.district.id;
+      metadata.districtName = facility.district.name;
+    }
+  } else if (aggregationLevel === 'PROVINCE') {
+    // Build province-level metadata (provinceId, provinceName)
+    // Get province info from the first facility's district
+    const facility = await db.query.facilities.findFirst({
+      where: eq(facilities.id, effectiveFacilityIds[0]),
+      with: { 
+        district: { 
+          with: { province: true } 
+        } 
+      }
+    });
+    
+    if (facility?.district?.province) {
+      metadata.provinceId = facility.district.province.id;
+      metadata.provinceName = facility.district.province.name;
+    }
+  }
+  
+  return metadata;
+}
+
+/**
+ * Generate per-facility breakdown for aggregated statements
+ * 
+ * This function creates detailed per-facility budget and actual amounts
+ * for aggregated statements (DISTRICT or PROVINCE level). It calculates
+ * variance and variance percentage for each facility and sorts by variance.
+ * 
+ * @param effectiveFacilityIds - Array of facility IDs included in the aggregation
+ * @param planningData - Aggregated planning data (budget)
+ * @param executionData - Aggregated execution data (actual)
+ * @returns Promise resolving to array of facility breakdown items
+ * 
+ * Requirements: 5.1, 5.2, 5.4, 5.5
+ */
+async function generateFacilityBreakdown(
+  effectiveFacilityIds: number[],
+  planningData: any,
+  executionData: any
+): Promise<any[]> {
+  
+  const breakdown: any[] = [];
+  
+  // Query facility details for all effective facility IDs
+  const facilitiesData = await db.query.facilities.findMany({
+    where: sql`${facilities.id} IN (${sql.join(effectiveFacilityIds.map(id => sql`${id}`), sql`, `)})`,
+    columns: {
+      id: true,
+      name: true,
+      facilityType: true
+    }
+  });
+  
+  const facilityMap = new Map(facilitiesData.map(f => [f.id, f]));
+  
+  for (const facilityId of effectiveFacilityIds) {
+    const facility = facilityMap.get(facilityId);
+    if (!facility) continue;
+    
+    // Calculate budget amount per facility from planning data
+    const budget = planningData?.facilityTotals?.get(facilityId) || 0;
+    
+    // Calculate actual amount per facility from execution data
+    const actual = executionData?.facilityTotals?.get(facilityId) || 0;
+    
+    // Calculate variance and variance percentage per facility
+    const variance = actual - budget;
+    const variancePercentage = budget !== 0 ? (variance / budget) * 100 : 0;
+    
+    // Determine favorability for each facility
+    // For expenses, under budget (negative variance) is favorable
+    const isFavorable = variance <= 0;
+    
+    breakdown.push({
+      facilityId: facility.id,
+      facilityName: facility.name,
+      facilityType: facility.facilityType,
+      budget,
+      actual,
+      variance,
+      variancePercentage: Math.round(variancePercentage * 100) / 100,
+      isFavorable
+    });
+  }
+  
+  // Sort facilities by variance percentage (descending)
+  // Most unfavorable (highest positive variance) first
+  breakdown.sort((a, b) => b.variancePercentage - a.variancePercentage);
+  
+  return breakdown;
+}
+
+/**
+ * Validate facility data completeness for facility-level statements
+ * 
+ * This function checks if a facility has planning and execution data for the
+ * reporting period and generates appropriate warnings or errors based on data availability.
+ * 
+ * @param aggregationLevel - The organizational level for data aggregation
+ * @param effectiveFacilityIds - Array of facility IDs included in the statement
+ * @param planningData - Aggregated planning data (budget)
+ * @param executionData - Aggregated execution data (actual)
+ * @param reportingPeriodId - The reporting period ID
+ * @returns Object containing validation warnings and errors
+ * 
+ * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
+ */
+async function validateFacilityDataCompleteness(
+  aggregationLevel: 'FACILITY' | 'DISTRICT' | 'PROVINCE',
+  effectiveFacilityIds: number[],
+  planningData: any,
+  executionData: any,
+  reportingPeriodId: number
+): Promise<{
+  warnings: string[];
+  errors: string[];
+  hasData: boolean;
+}> {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  
+  // Only perform detailed validation for FACILITY level
+  // For DISTRICT and PROVINCE, we rely on data completeness metadata
+  if (aggregationLevel !== 'FACILITY') {
+    return { warnings, errors, hasData: true };
+  }
+  
+  // For facility-level statements, validate the single facility
+  const facilityId = effectiveFacilityIds[0];
+  
+  // Check if facility has planning data for reporting period
+  const hasPlanningData = planningData && 
+    planningData.facilityTotals && 
+    (planningData.facilityTotals.get(facilityId) || 0) > 0;
+  
+  // Check if facility has execution data for reporting period
+  const hasExecutionData = executionData && 
+    executionData.facilityTotals && 
+    (executionData.facilityTotals.get(facilityId) || 0) > 0;
+  
+  // Get facility name for better error messages
+  let facilityName = `Facility ${facilityId}`;
+  try {
+    const facility = await db.query.facilities.findFirst({
+      where: eq(facilities.id, facilityId),
+      columns: { name: true }
+    });
+    if (facility) {
+      facilityName = facility.name;
+    }
+  } catch (error) {
+    // Continue with default name if query fails
+  }
+  
+  // Add error if facility has neither planning nor execution data
+  if (!hasPlanningData && !hasExecutionData) {
+    errors.push(
+      `No data available for ${facilityName} in the specified reporting period`
+    );
+    return { warnings, errors, hasData: false };
+  }
+  
+  // Add warning if facility has budget but no actual expenditure
+  if (hasPlanningData && !hasExecutionData) {
+    warnings.push(
+      `${facilityName} has budget but no actual expenditure recorded for this period`
+    );
+  }
+  
+  // Add warning if facility has expenditure but no budget
+  if (!hasPlanningData && hasExecutionData) {
+    warnings.push(
+      `${facilityName} has expenditure but no budget allocated for this period`
+    );
+  }
+  
+  return { 
+    warnings, 
+    errors, 
+    hasData: hasPlanningData || hasExecutionData 
+  };
+}
+
+// ============================================================================
 // Helper functions for response formatting
+// ============================================================================
+
 function formatCurrency(value: number): number {
   // Round to 2 decimal places for currency display
   return Math.round(value * 100) / 100;
@@ -3048,3 +3712,443 @@ async function processNetAssetsChangesStatement(
     total
   };
 }
+
+// ============================================================================
+// APPROVAL WORKFLOW HANDLERS
+// ============================================================================
+
+/**
+ * Handler for submitting a financial report for DAF approval
+ * Requirements: 1.1-1.5
+ */
+export const submitForApproval: AppRouteHandler<SubmitForApprovalRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+    const userId = userContext.userId;
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Execute workflow action
+    const result = await financialReportWorkflowService.submitForApproval(reportId, userId);
+
+    return c.json({
+      report: result.report,
+      message: result.message,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Workflow validation errors
+    return c.json(
+      { 
+        message: "Failed to submit report",
+        error: error.message 
+      },
+      HttpStatusCodes.BAD_REQUEST
+    );
+  }
+};
+
+/**
+ * Handler for DAF approval of a financial report
+ * Requirements: 2.1-2.4
+ */
+export const dafApprove: AppRouteHandler<DafApproveRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+    const userId = userContext.userId;
+
+    // Parse request body
+    const body = await c.req.json();
+    const comment = body.comment;
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Execute workflow action
+    const result = await financialReportWorkflowService.dafApprove(reportId, userId, comment);
+
+    return c.json({
+      report: result.report,
+      message: result.message,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Workflow validation errors
+    return c.json(
+      { 
+        message: "Failed to approve report",
+        error: error.message 
+      },
+      HttpStatusCodes.BAD_REQUEST
+    );
+  }
+};
+
+/**
+ * Handler for DAF rejection of a financial report
+ * Requirements: 2.5-2.8
+ */
+export const dafReject: AppRouteHandler<DafRejectRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+    const userId = userContext.userId;
+
+    // Parse request body
+    const body = await c.req.json();
+    const comment = body.comment;
+
+    // Validate comment is provided
+    if (!comment || comment.trim().length === 0) {
+      return c.json(
+        { 
+          message: "Rejection comment is required",
+          error: "Comment field cannot be empty" 
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Execute workflow action
+    const result = await financialReportWorkflowService.dafReject(reportId, userId, comment);
+
+    return c.json({
+      report: result.report,
+      message: result.message,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Workflow validation errors
+    return c.json(
+      { 
+        message: "Failed to reject report",
+        error: error.message 
+      },
+      HttpStatusCodes.BAD_REQUEST
+    );
+  }
+};
+
+/**
+ * Handler for DG final approval of a financial report
+ * Requirements: 3.1-3.5
+ */
+export const dgApprove: AppRouteHandler<DgApproveRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+    const userId = userContext.userId;
+
+    // Parse request body
+    const body = await c.req.json();
+    const comment = body.comment;
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Execute workflow action
+    const result = await financialReportWorkflowService.dgApprove(reportId, userId, comment);
+
+    // Note: PDF generation will be handled in task 5
+
+    return c.json({
+      report: result.report,
+      message: result.message,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Workflow validation errors
+    return c.json(
+      { 
+        message: "Failed to approve report",
+        error: error.message 
+      },
+      HttpStatusCodes.BAD_REQUEST
+    );
+  }
+};
+
+/**
+ * Handler for DG rejection of a financial report
+ * Requirements: 3.6-3.8
+ */
+export const dgReject: AppRouteHandler<DgRejectRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+    const userId = userContext.userId;
+
+    // Parse request body
+    const body = await c.req.json();
+    const comment = body.comment;
+
+    // Validate comment is provided
+    if (!comment || comment.trim().length === 0) {
+      return c.json(
+        { 
+          message: "Rejection comment is required",
+          error: "Comment field cannot be empty" 
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Execute workflow action
+    const result = await financialReportWorkflowService.dgReject(reportId, userId, comment);
+
+    return c.json({
+      report: result.report,
+      message: result.message,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Workflow validation errors
+    return c.json(
+      { 
+        message: "Failed to reject report",
+        error: error.message 
+      },
+      HttpStatusCodes.BAD_REQUEST
+    );
+  }
+};
+
+/**
+ * Handler for retrieving workflow logs for a financial report
+ * Requirements: 5.3-5.5
+ */
+export const getWorkflowLogs: AppRouteHandler<GetWorkflowLogsRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Retrieve workflow logs
+    const logs = await financialReportWorkflowService.getWorkflowLogs(reportId);
+
+    return c.json({
+      logs,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to fetch workflow logs" },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};

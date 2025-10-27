@@ -104,3 +104,51 @@ This format better represents the nature of net asset changes by separating the 
 3. WHEN rendering "Cash and cash equivalent" THEN the system SHALL display it without year suffixes
 4. WHEN rendering "Receivables and other financial assets" THEN the system SHALL display it without year suffixes
 5. WHEN rendering all adjustment line items THEN the system SHALL display clean descriptions without year labels
+
+### Requirement 9: Opening Balance Calculation from Previous Period Total Net Assets
+
+**User Story:** As a financial accountant, I want the opening balance "Balances as at 30th June {{PREV_YEAR}}" to equal the total net assets from the previous fiscal year's Statement of Financial Position, so that the statements are consistent and accurate across reporting periods.
+
+#### Acceptance Criteria
+
+1. WHEN calculating the opening balance line "Balances as at 30th June {{PREV_YEAR}}" THEN the system SHALL retrieve the total net assets value from the previous fiscal year
+2. WHEN the previous fiscal year data is available THEN the system SHALL use the calculationFormula to reference TOTAL_NET_ASSETS from the previous period
+3. WHEN displaying the opening balance THEN the system SHALL show the value in the "Accumulated surplus/loss" column
+4. WHEN the previous period total net assets is not available THEN the system SHALL display zero or null as appropriate
+5. WHEN validating the statement THEN the system SHALL ensure the opening balance matches the previous period's closing net assets balance
+
+### Requirement 10: Closing Balance Calculation for Previous Fiscal Year
+
+**User Story:** As a financial accountant, I want the closing balance "Balance as at 30th June {{CURRENT_YEAR}}" to be calculated as the sum of the opening balance plus all prior year adjustments, so that the statement accurately reflects the cumulative changes in net assets.
+
+#### Acceptance Criteria
+
+1. WHEN calculating "Balance as at 30th June {{CURRENT_YEAR}}" THEN the system SHALL sum the opening balance (BALANCES_JUNE_PREV) plus all adjustment line items
+2. WHEN the adjustment line items include Cash and cash equivalent, Receivables, Investments, Payables, Borrowing, and Net surplus/Deficit THEN the system SHALL include all these values in the calculation
+3. WHEN displaying the closing balance THEN the system SHALL show the calculated total in the "Total" column
+4. WHEN the calculationFormula is defined THEN the system SHALL use: SUM(BALANCES_JUNE_PREV, CASH_EQUIVALENT_PREV_CURRENT, RECEIVABLES_PREV_CURRENT, INVESTMENTS_PREV_CURRENT, PAYABLES_PREV_CURRENT, BORROWING_PREV_CURRENT, NET_SURPLUS_PREV_CURRENT)
+5. WHEN validating the statement THEN the system SHALL ensure the closing balance equals opening balance plus all adjustments
+
+### Requirement 11: Carryforward Balance to New Fiscal Year
+
+**User Story:** As a financial accountant, I want the opening balance of the new fiscal year "Balance as at 01st July {{CURRENT_YEAR}}" to equal the closing balance from the previous fiscal year "Balance as at 30th June {{CURRENT_YEAR}}", so that there is continuity between fiscal periods.
+
+#### Acceptance Criteria
+
+1. WHEN calculating "Balance as at 01st July {{CURRENT_YEAR}}" THEN the system SHALL use the value from "Balance as at 30th June {{CURRENT_YEAR}}"
+2. WHEN the calculationFormula is defined THEN the system SHALL reference BALANCE_JUNE_CURRENT
+3. WHEN displaying the carryforward balance THEN the system SHALL show the value in the "Accumulated surplus/loss" column
+4. WHEN validating the statement THEN the system SHALL ensure the July opening balance equals the June closing balance
+5. WHEN the June closing balance is not available THEN the system SHALL display zero or null as appropriate
+
+### Requirement 12: Final Closing Balance Calculation for Current Fiscal Year
+
+**User Story:** As a financial accountant, I want the final closing balance "Balance as at {{PERIOD_END_DATE}}" to be calculated as the sum of the current year opening balance plus all current year adjustments, so that the statement accurately reflects the final net assets position.
+
+#### Acceptance Criteria
+
+1. WHEN calculating "Balance as at {{PERIOD_END_DATE}}" THEN the system SHALL sum the opening balance (BALANCE_JULY_CURRENT) plus all current year adjustment line items
+2. WHEN the adjustment line items include Cash and cash equivalent, Receivables, Investments, Payables, Borrowing, and Net surplus/Deficit for the current year THEN the system SHALL include all these values in the calculation
+3. WHEN displaying the final closing balance THEN the system SHALL show the calculated total in the "Total" column
+4. WHEN the calculationFormula is defined THEN the system SHALL use: SUM(BALANCE_JULY_CURRENT, CASH_EQUIVALENT_CURRENT_NEXT, RECEIVABLES_CURRENT_NEXT, INVESTMENTS_CURRENT_NEXT, PAYABLES_CURRENT_NEXT, BORROWING_CURRENT_NEXT, NET_SURPLUS_CURRENT_NEXT)
+5. WHEN validating the statement THEN the system SHALL ensure the final closing balance equals the current year opening balance plus all current year adjustments

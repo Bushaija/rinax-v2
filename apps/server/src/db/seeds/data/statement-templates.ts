@@ -568,6 +568,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
     displayOrder: 1,
     level: 1,
     isSubtotalLine: true,
+    calculationFormula: 'TOTAL_NET_ASSETS',
     metadata: { columnType: 'ACCUMULATED' }
   },
 
@@ -584,7 +585,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
   {
     lineItem: 'Cash and cash equivalent',
     lineCode: 'CASH_EQUIVALENT_PREV_CURRENT',
-    eventCodes: ['CASH_EQUIVALENTS_END'],
+    eventCodes: ['PRIOR_YEAR_ADJUSTMENTS'],
     displayOrder: 3,
     level: 2,
     metadata: { columnType: 'ADJUSTMENT' }
@@ -639,6 +640,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
     displayOrder: 9,
     level: 1,
     isTotalLine: true,
+    calculationFormula: 'SUM(BALANCES_JUNE_PREV, CASH_EQUIVALENT_PREV_CURRENT, RECEIVABLES_PREV_CURRENT, INVESTMENTS_PREV_CURRENT, PAYABLES_PREV_CURRENT, BORROWING_PREV_CURRENT, NET_SURPLUS_PREV_CURRENT)',
     metadata: { columnType: 'TOTAL' }
   },
 
@@ -650,6 +652,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
     displayOrder: 10,
     level: 1,
     isSubtotalLine: true,
+    calculationFormula: 'BALANCE_JUNE_CURRENT',
     metadata: { columnType: 'ACCUMULATED' }
   },
 
@@ -666,7 +669,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
   {
     lineItem: 'Cash and cash equivalent',
     lineCode: 'CASH_EQUIVALENT_CURRENT_NEXT',
-    eventCodes: ['CASH_EQUIVALENTS_END'],
+    eventCodes: ['PRIOR_YEAR_ADJUSTMENTS'],
     displayOrder: 12,
     level: 2,
     metadata: { columnType: 'ADJUSTMENT' }
@@ -723,6 +726,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
     displayOrder: 18,
     level: 1,
     isTotalLine: true,
+    calculationFormula: 'SUM(BALANCE_JULY_CURRENT, CASH_EQUIVALENT_CURRENT_NEXT, RECEIVABLES_CURRENT_NEXT, INVESTMENTS_CURRENT_NEXT, PAYABLES_CURRENT_NEXT, BORROWING_CURRENT_NEXT, NET_SURPLUS_CURRENT_NEXT)',
     metadata: { columnType: 'TOTAL' }
   },
 ];

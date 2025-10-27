@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label'
 import { getCurrentFiscalYear, generateQuarterLabels } from '@/features/execution/utils'
 import { Download, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { usePermissions } from '@/components/providers/session-provider'
+import { usePermissions, useUser } from '@/components/providers/session-provider'
 import { useGetCurrentReportingPeriod, useGetReportingPeriods } from '@/hooks/queries'
+import { ScopeFilters } from './_components/scope-filters'
 
 // Project configuration
 const projectTabs: FilterTab[] = [
@@ -137,14 +138,23 @@ const ReportHeader = ({
 // Tab Content Component that handles loading state
 const TabContent = ({
   projectType,
-  reportingPeriodId
+  reportingPeriodId,
+  scope,
+  provinceId,
+  districtId
 }: {
   projectType: string
   reportingPeriodId?: number
+  scope?: 'district' | 'provincial' | 'country'
+  provinceId?: number
+  districtId?: number
 }) => {
   const { data, isLoading, error } = useGetCompiledExecution({
     projectType: projectType as 'HIV' | 'Malaria' | 'TB',
-    reportingPeriodId
+    reportingPeriodId,
+    scope,
+    provinceId,
+    districtId
   })
 
   if (isLoading) {
@@ -174,7 +184,46 @@ export default function AggregatedReportPage() {
   const [selectedTab, setSelectedTab] = useState('HIV')
   const { toast } = useToast()
   const { hasPermission } = usePermissions()
+  const user = useUser()
   const canAccessPreviousFiscalYear = hasPermission('access_previous_fiscal_year_data')
+
+  // Check if user is admin (can access provincial and country scopes)
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+
+  // Load persisted filters from localStorage
+  const loadPersistedFilters = () => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const saved = localStorage.getItem('compiled-report-filters')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  const persistedFilters = loadPersistedFilters()
+
+  // Scope state for admin users (with localStorage persistence)
+  const [scope, setScope] = useState<'district' | 'provincial' | 'country'>(
+    persistedFilters.scope || 'district'
+  )
+  const [selectedProvinceId, setSelectedProvinceId] = useState<number | undefined>(
+    persistedFilters.provinceId
+  )
+  const [selectedDistrictId, setSelectedDistrictId] = useState<number | undefined>(
+    persistedFilters.districtId
+  )
+
+  // Persist filters to localStorage whenever they change
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('compiled-report-filters', JSON.stringify({
+        scope,
+        provinceId: selectedProvinceId,
+        districtId: selectedDistrictId
+      }))
+    }
+  }, [scope, selectedProvinceId, selectedDistrictId])
 
   // Fiscal year switcher state
   const [showPreviousFiscalYear, setShowPreviousFiscalYear] = useState(false)
@@ -213,7 +262,10 @@ export default function AggregatedReportPage() {
   // Fetch data for the selected tab to get metadata
   const { data } = useGetCompiledExecution({
     projectType: selectedTab as 'HIV' | 'Malaria' | 'TB',
-    reportingPeriodId: selectedReportingPeriodId
+    reportingPeriodId: selectedReportingPeriodId,
+    scope,
+    provinceId: scope === 'provincial' ? selectedProvinceId : undefined,
+    districtId: scope === 'district' ? selectedDistrictId : undefined
   })
 
   // Export mutation
@@ -288,7 +340,15 @@ export default function AggregatedReportPage() {
   // Create tabs with content that handles its own loading state
   const tabsWithContent = projectTabs.map(tab => ({
     ...tab,
-    content: <TabContent projectType={tab.value} reportingPeriodId={selectedReportingPeriodId} />
+    content: (
+      <TabContent
+        projectType={tab.value}
+        reportingPeriodId={selectedReportingPeriodId}
+        scope={scope}
+        provinceId={scope === 'provincial' ? selectedProvinceId : undefined}
+        districtId={scope === 'district' ? selectedDistrictId : undefined}
+      />
+    )
   }))
 
   return (
@@ -307,6 +367,21 @@ export default function AggregatedReportPage() {
         currentFiscalYear={currentFiscalYear}
         previousFiscalYear={previousFiscalYear}
       />
+
+      {/* Scope Filters */}
+      {isAdmin && (
+        <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <ScopeFilters
+            scope={scope}
+            onScopeChange={setScope}
+            provinceId={selectedProvinceId}
+            onProvinceChange={setSelectedProvinceId}
+            districtId={selectedDistrictId}
+            onDistrictChange={setSelectedDistrictId}
+            isAdmin={isAdmin}
+          />
+        </div>
+      )}
 
       {/* Filter Tabs with Report Content */}
       <FilterTabs

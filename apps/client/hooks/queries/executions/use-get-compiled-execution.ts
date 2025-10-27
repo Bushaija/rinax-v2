@@ -11,6 +11,8 @@ function useGetCompiledExecution(query: GetCompiledExecutionRequest) {
     queryKey: [
       "execution",
       "compiled",
+      query?.scope ?? 'district',
+      query?.provinceId ?? null,
       query?.projectType ?? null,
       query?.facilityType ?? null,
       query?.reportingPeriodId ?? null,

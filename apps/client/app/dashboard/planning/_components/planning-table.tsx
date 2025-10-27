@@ -51,9 +51,15 @@ export function PlanningTable({
   const projectTypeFilter = searchParams.get('projectType') || '';
   const search = searchParams.get('search') || '';
 
+  // Refresh function to refetch data
+  const handleRefresh = React.useCallback(() => {
+    // The useGetPlanningActivities hook will automatically refetch when we trigger a refresh
+    window.location.reload();
+  }, []);
+
   const columns = React.useMemo(
-    () => getPlanningTableColumns({ setRowAction, router }),
-    [setRowAction, router]
+    () => getPlanningTableColumns({ setRowAction, router, onRefresh: handleRefresh }),
+    [setRowAction, router, handleRefresh]
   );
 
   // Build filter object for the API call
@@ -153,7 +159,8 @@ export function PlanningTable({
             table={table} 
             programs={programs}
             getFacilityTypes={getFacilityTypes}
-            districtId={districtId} // ✅ Pass districtId
+            districtId={districtId}
+            onRefresh={handleRefresh}
           />
         </DataTableToolbar>
       </DataTable>

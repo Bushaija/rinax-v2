@@ -219,8 +219,22 @@ export class CustomEventMapper {
    * @returns Fallback mapping configuration
    */
   getFallbackMapping(lineCode: string, eventCodes: string[]): BudgetVsActualMapping {
+    // Ensure all event codes are strings and filter out invalid values
+    const validEventCodes = eventCodes
+      .filter(code => code != null && typeof code === 'string')
+      .map(code => String(code));
+    
+    if (validEventCodes.length === 0) {
+      console.warn(`[CustomEventMapper] No valid event codes for line ${lineCode}`);
+      return {
+        lineCode,
+        budgetEvents: [],
+        actualEvents: [],
+      };
+    }
+    
     // For fallback, assume budget uses PLANNING versions and actual uses standard versions
-    const budgetEvents = eventCodes.map(code => {
+    const budgetEvents = validEventCodes.map(code => {
       // If it's already a planning event, use as-is
       if (code.includes('_PLANNING')) return code;
       // Otherwise, try to find a planning equivalent
@@ -230,7 +244,7 @@ export class CustomEventMapper {
     return {
       lineCode,
       budgetEvents,
-      actualEvents: eventCodes, // Use original event codes for actual
+      actualEvents: validEventCodes, // Use original event codes for actual
     };
   }
 }

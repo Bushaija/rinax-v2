@@ -33,6 +33,10 @@ Frontend Component (renders 3-column table)
 3. **API Response Structure**: Extend StatementLine interface to include three value fields
 4. **Frontend Transformation**: Update transform function to handle three-column mapping
 5. **Backward Compatibility**: Use feature detection to apply changes only to NET_ASSETS_CHANGES
+6. **Opening Balance Calculation**: The opening balance line "Balances as at 30th June {{PREV_YEAR}}" uses `calculationFormula: 'TOTAL_NET_ASSETS'` to automatically pull the total net assets value from the previous fiscal year's Statement of Financial Position, ensuring consistency across statements
+7. **Closing Balance Calculation**: The closing balance line "Balance as at 30th June {{CURRENT_YEAR}}" uses a SUM formula to add the opening balance plus all prior year adjustments (Cash, Receivables, Investments, Payables, Borrowing, and Net surplus/Deficit), ensuring accurate cumulative totals
+8. **Carryforward Balance**: The new fiscal year opening balance "Balance as at 01st July {{CURRENT_YEAR}}" uses `calculationFormula: 'BALANCE_JUNE_CURRENT'` to automatically carry forward the closing balance from the previous fiscal year, ensuring period continuity
+9. **Final Closing Balance**: The final closing balance "Balance as at {{PERIOD_END_DATE}}" uses a SUM formula to add the current year opening balance (BALANCE_JULY_CURRENT) plus all current year adjustments (Cash, Receivables, Investments, Payables, Borrowing, and Net surplus/Deficit), providing the final net assets position
 
 ## Components and Interfaces
 
@@ -69,6 +73,7 @@ export type TemplateLine = {
 
 ```typescript
 // Opening balance - goes to ACCUMULATED column
+// Uses calculationFormula to pull from previous period's TOTAL_NET_ASSETS
 { 
   lineItem: 'Balances as at 30th June {{PREV_YEAR}}', 
   lineCode: 'BALANCES_JUNE_PREV', 
@@ -76,25 +81,28 @@ export type TemplateLine = {
   displayOrder: 1, 
   level: 1, 
   isSubtotalLine: true,
+  calculationFormula: 'TOTAL_NET_ASSETS',
   metadata: { columnType: 'ACCUMULATED' }
 },
 
 // Adjustment line - goes to ADJUSTMENT column
+// Uses PRIOR_YEAR_ADJUSTMENTS event code to align with balance sheet reporting
 { 
   lineItem: 'Cash and cash equivalent', 
   lineCode: 'CASH_EQUIVALENT_PREV_CURRENT', 
-  eventCodes: ['CASH_EQUIVALENTS_END'], 
+  eventCodes: ['PRIOR_YEAR_ADJUSTMENTS'], 
   displayOrder: 3, 
   level: 2,
   metadata: { columnType: 'ADJUSTMENT' }
 },
 
-// Total line - calculated from ACCUMULATED + ADJUSTMENT
+// Total line - calculated from opening balance + all adjustments
 { 
   lineItem: 'Balance as at 30th June {{CURRENT_YEAR}}', 
   lineCode: 'BALANCE_JUNE_CURRENT', 
   eventCodes: [], 
-  displayOrder: 9, 
+  displayOrder: 9,
+  calculationFormula: 'SUM(BALANCES_JUNE_PREV, CASH_EQUIVALENT_PREV_CURRENT, RECEIVABLES_PREV_CURRENT, INVESTMENTS_PREV_CURRENT, PAYABLES_PREV_CURRENT, BORROWING_PREV_CURRENT, NET_SURPLUS_PREV_CURRENT)', 
   level: 1, 
   isTotalLine: true,
   metadata: { columnType: 'TOTAL' }

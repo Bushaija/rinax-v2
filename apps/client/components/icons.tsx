@@ -3,6 +3,7 @@ export type IconProps = React.HTMLAttributes<SVGElement>;
 import {
   Activity,
   ClipboardList,
+  ClipboardCheck,
   CheckSquare,
   Check,
   Layers,
@@ -124,6 +125,9 @@ export const Icons = {
   // Budget Planning & Execution
   clipboardList: ({ ...props }: LucideProps) => (
     <ClipboardList suppressHydrationWarning {...props} />
+  ),
+  clipboardCheck: ({ ...props }: LucideProps) => (
+    <ClipboardCheck suppressHydrationWarning {...props} />
   ),
   checkList: ({ ...props }: LucideProps) => (
     <CheckSquare suppressHydrationWarning {...props} />

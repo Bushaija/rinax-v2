@@ -96,6 +96,10 @@ export type QuarterlyValues = z.infer<typeof quarterlyValuesSchema>;
 
 // Compiled execution aggregation schemas
 export const compiledExecutionQuerySchema = z.object({
+  scope: z.enum(['district', 'provincial', 'country']).optional().default('district')
+    .describe("Organizational scope for aggregation (district, provincial, or country)"),
+  provinceId: z.coerce.number().int().optional()
+    .describe("Province ID (required for provincial scope)"),
   projectType: z.enum(['HIV', 'Malaria', 'TB']).optional()
     .describe("Filter by project type (HIV, Malaria, or TB)"),
   facilityType: z.enum(['hospital', 'health_center']).optional()
@@ -107,7 +111,7 @@ export const compiledExecutionQuerySchema = z.object({
   quarter: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).optional()
     .describe("Filter by quarter (Q1, Q2, Q3, or Q4)"),
   districtId: z.coerce.number().int().optional()
-    .describe("Filter by district ID (future enhancement)"),
+    .describe("Filter by district ID (admin override for district scope)"),
 });
 
 export const facilityColumnSchema = z.object({
@@ -184,12 +188,29 @@ export const facilityTotalsSchema = z.object({
 });
 
 export const appliedFiltersSchema = z.object({
+  scope: z.string().optional(),
+  provinceId: z.number().optional(),
   projectType: z.string().optional(),
   facilityType: z.string().optional(),
   reportingPeriodId: z.number().optional(),
   year: z.number().optional(),
   quarter: z.string().optional(),
   districtId: z.number().optional(),
+});
+
+export const scopeDetailsSchema = z.object({
+  districtIds: z.array(z.number()).optional()
+    .describe("List of district IDs included in the scope"),
+  districtNames: z.array(z.string()).optional()
+    .describe("List of district names included in the scope"),
+  provinceId: z.number().optional()
+    .describe("Province ID for provincial scope"),
+  provinceName: z.string().optional()
+    .describe("Province name for provincial scope"),
+  provinceCount: z.number().optional()
+    .describe("Total number of provinces for country scope"),
+  districtCount: z.number().optional()
+    .describe("Total number of districts in the scope"),
 });
 
 export const compiledExecutionResponseSchema = z.object({
@@ -204,6 +225,12 @@ export const compiledExecutionResponseSchema = z.object({
     aggregationDate: z.string(),
     facilityCount: z.number(),
     reportingPeriod: z.string(),
+    scope: z.enum(['district', 'provincial', 'country'])
+      .describe("The organizational scope used for this aggregation"),
+    scopeDetails: scopeDetailsSchema.optional()
+      .describe("Detailed information about the geographic scope"),
+    performanceWarning: z.string().optional()
+      .describe("Warning message for large datasets or performance considerations"),
   }),
 });
 
@@ -213,4 +240,5 @@ export type FacilityColumn = z.infer<typeof facilityColumnSchema>;
 export type SectionSummary = z.infer<typeof sectionSummarySchema>;
 export type FacilityTotals = z.infer<typeof facilityTotalsSchema>;
 export type AppliedFilters = z.infer<typeof appliedFiltersSchema>;
+export type ScopeDetails = z.infer<typeof scopeDetailsSchema>;
 export type CompiledExecutionResponse = z.infer<typeof compiledExecutionResponseSchema>;

@@ -583,7 +583,12 @@ export const getExecution: AppRouteHandler<GetExecutionRoute> = async (c) => {
 };
 
 export const getAll: AppRouteHandler<GetAllRoute> = async (c) => {
-    const data = await db
+    // Get user context to determine accessible facilities
+    const { getUserContext } = await import("@/lib/utils/get-user-facility");
+    const userContext = await getUserContext(c);
+    
+    // Query all facilities with district information
+    const allFacilities = await db
         .select({
             id: facilities.id,
             name: facilities.name,
@@ -594,6 +599,11 @@ export const getAll: AppRouteHandler<GetAllRoute> = async (c) => {
         .from(facilities)
         .innerJoin(districts, eq(facilities.districtId, districts.id))
         .orderBy(asc(districts.name), asc(facilities.name));
+    
+    // Filter to only return facilities the user has access to
+    const accessibleFacilities = allFacilities.filter(facility => 
+        userContext.accessibleFacilityIds.includes(facility.id)
+    );
 
-    return c.json(data, HttpStatusCodes.OK);
+    return c.json(accessibleFacilities, HttpStatusCodes.OK);
 };

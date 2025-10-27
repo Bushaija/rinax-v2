@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface BudgetSummaryCardsProps {
   budgetSummary: {
@@ -14,7 +15,7 @@ export function BudgetSummaryCards({ budgetSummary }: BudgetSummaryCardsProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "Rwf",
+      currency: "RWF",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -24,12 +25,12 @@ export function BudgetSummaryCards({ budgetSummary }: BudgetSummaryCardsProps) {
     budgetSummary.utilizationPercentage > 90
       ? "text-red-600"
       : budgetSummary.utilizationPercentage > 75
-      ? "text-yellow-600"
-      : "text-green-600";
+        ? "text-yellow-600"
+        : "text-green-600";
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {/* Total Allocated */}
+      {/* Total Allocated - Blue */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Allocated</CardTitle>
@@ -45,7 +46,7 @@ export function BudgetSummaryCards({ budgetSummary }: BudgetSummaryCardsProps) {
         </CardContent>
       </Card>
 
-      {/* Total Spent */}
+      {/* Total Spent - Green */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
@@ -61,7 +62,7 @@ export function BudgetSummaryCards({ budgetSummary }: BudgetSummaryCardsProps) {
         </CardContent>
       </Card>
 
-      {/* Remaining Budget */}
+      {/* Remaining Budget - Orange */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Remaining</CardTitle>
@@ -77,14 +78,14 @@ export function BudgetSummaryCards({ budgetSummary }: BudgetSummaryCardsProps) {
         </CardContent>
       </Card>
 
-      {/* Utilization */}
+      {/* Utilization - Purple */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Utilization</CardTitle>
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className={`text-2xl font-bold ${utilizationColor}`}>
+          <div className={cn("text-2xl font-medium", utilizationColor)}>
             {budgetSummary.utilizationPercentage.toFixed(1)}%
           </div>
           <p className="text-xs text-muted-foreground mt-1">

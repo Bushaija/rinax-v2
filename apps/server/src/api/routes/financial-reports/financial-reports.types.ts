@@ -1,6 +1,16 @@
 import { z } from "@hono/zod-openapi";
 
-export const reportStatusEnum = z.enum(['draft', 'submitted', 'approved', 'rejected']);
+export const reportStatusEnum = z.enum([
+  'draft', 
+  'submitted', 
+  'approved', 
+  'rejected',
+  'pending_daf_approval',
+  'rejected_by_daf',
+  'approved_by_daf',
+  'rejected_by_dg',
+  'fully_approved'
+]);
 export const reportTypeEnum = z.enum([
   'revenue_expenditure', 
   'balance_sheet', 
@@ -47,6 +57,15 @@ export const selectFinancialReportSchema = z.object({
   submittedAt: z.string().nullable(),
   approvedBy: z.number().int().nullable(),
   approvedAt: z.string().nullable(),
+  // Approval workflow fields
+  dafId: z.number().int().nullable(),
+  dafApprovedAt: z.string().nullable(),
+  dafComment: z.string().nullable(),
+  dgId: z.number().int().nullable(),
+  dgApprovedAt: z.string().nullable(),
+  dgComment: z.string().nullable(),
+  finalPdfUrl: z.string().nullable(),
+  locked: z.boolean(),
 });
 
 export const patchFinancialReportSchema = insertFinancialReportSchema.partial();
@@ -90,6 +109,17 @@ export const financialReportWithRelationsSchema = selectFinancialReportSchema.ex
     name: z.string(),
     email: z.string(),
   }).optional(),
+  dafApprover: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+  dgApprover: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+  workflowLogCount: z.number().int().optional(),
 });
 
 // Request/Response schemas
@@ -98,6 +128,7 @@ export const financialReportListRequestSchema = z.object({
   facilityId: z.number().int().optional(),
   fiscalYear: z.string().optional(),
   reportType: reportTypeEnum.optional(),
+  status: reportStatusEnum.optional(),
   createdBy: z.number().int().optional(),
   fromDate: z.string().optional(),
   toDate: z.string().optional(),
@@ -211,12 +242,32 @@ export const statementCodeEnum = z.enum([
 
 export const projectTypeEnum = z.enum(['HIV', 'Malaria', 'TB']);
 
+// Aggregation level enum
+export const aggregationLevelEnum = z.enum(['FACILITY', 'DISTRICT', 'PROVINCE']);
+
 // Statement generation request schema
 export const generateStatementRequestSchema = z.object({
   statementCode: statementCodeEnum,
   reportingPeriodId: z.number().int().positive(),
   projectType: projectTypeEnum,
-  facilityId: z.number().int().positive().optional(),
+  
+  // NEW: Aggregation level control
+  aggregationLevel: aggregationLevelEnum
+    .optional()
+    .default('DISTRICT')
+    .describe('Organizational level for data aggregation'),
+  
+  // ENHANCED: Now required when aggregationLevel is FACILITY
+  facilityId: z.number().int().positive()
+    .optional()
+    .describe('Specific facility ID for facility-level statements'),
+  
+  // NEW: Optional facility breakdown
+  includeFacilityBreakdown: z.boolean()
+    .optional()
+    .default(false)
+    .describe('Include per-facility details in aggregated statements'),
+  
   includeComparatives: z.boolean().default(true),
   customMappings: z.record(z.string(), z.any()).optional(),
 });
@@ -376,6 +427,45 @@ export const budgetVsActualStatementSchema = z.object({
   }),
 });
 
+// Aggregation metadata schema
+export const aggregationMetadataSchema = z.object({
+  level: aggregationLevelEnum,
+  
+  // Facility-level metadata
+  facilityId: z.number().optional(),
+  facilityName: z.string().optional(),
+  facilityType: z.string().optional(),
+  
+  // District-level metadata
+  districtId: z.number().optional(),
+  districtName: z.string().optional(),
+  
+  // Province-level metadata
+  provinceId: z.number().optional(),
+  provinceName: z.string().optional(),
+  
+  // Common metadata
+  facilitiesIncluded: z.array(z.number()),
+  totalFacilities: z.number(),
+  dataCompleteness: z.object({
+    facilitiesWithPlanning: z.number(),
+    facilitiesWithExecution: z.number(),
+    facilitiesWithBoth: z.number(),
+  }),
+});
+
+// Facility breakdown schema
+export const facilityBreakdownItemSchema = z.object({
+  facilityId: z.number(),
+  facilityName: z.string(),
+  facilityType: z.string(),
+  budget: z.number(),
+  actual: z.number(),
+  variance: z.number(),
+  variancePercentage: z.number(),
+  isFavorable: z.boolean(),
+});
+
 // Statement generation response schema with union types for backward compatibility
 export const generateStatementResponseSchema = z.object({
   statement: z.union([
@@ -442,6 +532,12 @@ export const generateStatementResponseSchema = z.object({
     eventsProcessed: z.number().int(),
     formulasCalculated: z.number().int(),
   }),
+  
+  // NEW: Aggregation metadata
+  aggregationMetadata: aggregationMetadataSchema.optional(),
+  
+  // NEW: Optional facility breakdown
+  facilityBreakdown: z.array(facilityBreakdownItemSchema).optional(),
 });
 
 // ============================================================================
@@ -486,6 +582,15 @@ export type StandardStatement = z.infer<typeof standardStatementSchema>;
 export type GenerateStatementResponse = z.infer<typeof generateStatementResponseSchema>;
 
 // ============================================================================
+// AGGREGATION TYPE DEFINITIONS
+// ============================================================================
+
+export type AggregationLevel = z.infer<typeof aggregationLevelEnum>;
+export type AggregationMetadata = z.infer<typeof aggregationMetadataSchema>;
+export type FacilityBreakdownItem = z.infer<typeof facilityBreakdownItemSchema>;
+export type GenerateStatementRequest = z.infer<typeof generateStatementRequestSchema>;
+
+// ============================================================================
 // TYPE GUARDS FOR STATEMENT RESPONSE TYPES
 // ============================================================================
 
@@ -524,3 +629,86 @@ export function isBudgetVsActualLine(
     typeof line.variance === 'number'
   );
 }
+
+// ============================================================================
+// WORKFLOW LOG SCHEMAS
+// ============================================================================
+
+export const workflowActionEnum = z.enum([
+  'submitted',
+  'daf_approved',
+  'daf_rejected',
+  'dg_approved',
+  'dg_rejected'
+]);
+
+export const workflowLogSchema = z.object({
+  id: z.number().int(),
+  reportId: z.number().int(),
+  action: workflowActionEnum,
+  actorId: z.number().int(),
+  comment: z.string().nullable(),
+  timestamp: z.string(),
+});
+
+export const workflowLogWithActorSchema = workflowLogSchema.extend({
+  actor: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+});
+
+export const insertWorkflowLogSchema = z.object({
+  reportId: z.number().int(),
+  action: workflowActionEnum,
+  actorId: z.number().int(),
+  comment: z.string().optional(),
+});
+
+// ============================================================================
+// APPROVAL WORKFLOW ACTION SCHEMAS
+// ============================================================================
+
+export const submitForApprovalRequestSchema = z.object({
+  // No body needed, uses route param
+});
+
+export const approvalActionRequestSchema = z.object({
+  comment: z.string().optional(),
+});
+
+export const rejectionActionRequestSchema = z.object({
+  comment: z.string().min(1, 'Rejection comment is required'),
+});
+
+export const approvalActionResponseSchema = z.object({
+  report: selectFinancialReportSchema,
+  message: z.string(),
+});
+
+export const workflowLogsResponseSchema = z.object({
+  logs: z.array(workflowLogWithActorSchema),
+});
+
+// ============================================================================
+// WORKFLOW TYPE DEFINITIONS
+// ============================================================================
+
+export type WorkflowAction = z.infer<typeof workflowActionEnum>;
+export type WorkflowLog = z.infer<typeof workflowLogSchema>;
+export type WorkflowLogWithActor = z.infer<typeof workflowLogWithActorSchema>;
+export type InsertWorkflowLog = z.infer<typeof insertWorkflowLogSchema>;
+export type ApprovalActionRequest = z.infer<typeof approvalActionRequestSchema>;
+export type RejectionActionRequest = z.infer<typeof rejectionActionRequestSchema>;
+export type ApprovalActionResponse = z.infer<typeof approvalActionResponseSchema>;
+
+// ============================================================================
+// BASE TYPE DEFINITIONS
+// ============================================================================
+
+export type ReportStatus = z.infer<typeof reportStatusEnum>;
+export type FinancialReport = z.infer<typeof selectFinancialReportSchema>;
+export type InsertFinancialReport = z.infer<typeof insertFinancialReportSchema>;
+export type PatchFinancialReport = z.infer<typeof patchFinancialReportSchema>;
+export type FinancialReportWithRelations = z.infer<typeof financialReportWithRelationsSchema>;

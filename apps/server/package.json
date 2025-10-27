@@ -18,6 +18,7 @@
     "db:seed": "cross-env DB_SEEDING=true tsx src/db/seeds/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:dashboard-indexes": "tsx --require tsconfig-paths/register src/db/migrations/run-dashboard-indexes.ts",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push"
   },

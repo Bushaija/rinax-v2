@@ -1,14 +1,35 @@
 import { HTTPException } from 'hono/http-exception'
 import * as HttpStatusCodes from "stoker/http-status-codes"
-import { db } from '@/api/db'
-import * as schema from '@/api/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { db } from '@/db'
+import * as schema from '@/db/schema'
+import { eq, and, sql } from 'drizzle-orm'
 import type { AppRouteHandler } from "@/api/lib/types"
 import { getUserContext } from '@/lib/utils/get-user-facility'
 import type {
   GetAccountantFacilityOverviewRoute,
   GetAccountantTasksRoute,
+  GetDashboardMetricsRoute,
+  GetProgramDistributionRoute,
+  GetBudgetByDistrictRoute,
+  GetBudgetByFacilityRoute,
+  GetProvinceApprovalSummaryRoute,
+  GetDistrictApprovalDetailsRoute,
 } from "./dashboard.routes"
+import { 
+  getCurrentReportingPeriod, 
+  aggregateBudgetData,
+  aggregateByDistrict,
+  aggregateByFacility,
+  getAccessibleFacilitiesInProvince, 
+  getAccessibleFacilitiesInDistrict,
+  validateProvinceAccess,
+  validateDistrictAccess,
+  fetchPlanningEntries,
+  fetchExecutionEntries,
+  calculateAllocatedBudget,
+  calculateSpentBudget,
+  calculateUtilization
+} from '../../services/dashboard'
 
 // Helper to calculate budget totals from form data
 function calculateBudgetFromFormData(formData: any, entityType?: string): number {
@@ -28,7 +49,7 @@ function calculateBudgetFromFormData(formData: any, entityType?: string): number
   
   // Handle planning data structure (activities with total_budget)
   else if (formData.activities && typeof formData.activities === 'object') {
-    Object.values(formData.activities).forEach((activity: any, index: number) => {
+    Object.values(formData.activities).forEach((activity: any) => {
       if (activity && typeof activity === 'object') {
         // Check for total_budget first (most common in planning)
         if (activity.total_budget && typeof activity.total_budget === 'number') {
@@ -54,7 +75,7 @@ function calculateBudgetFromFormData(formData: any, entityType?: string): number
   
   // Handle activities as an array (fallback for different form structures)
   else if (formData.activities && Array.isArray(formData.activities)) {
-    formData.activities.forEach((activity: any, index: number) => {
+    formData.activities.forEach((activity: any) => {
       if (activity && typeof activity === 'object') {
         if (activity.total_budget && typeof activity.total_budget === 'number') {
           total += activity.total_budget;
@@ -81,7 +102,8 @@ function calculateBudgetFromFormData(formData: any, entityType?: string): number
   return total;
 }
 
-// Get Accountant Facility Overview
+// Get Accountant Facility Overview (Legacy - Deprecated)
+// This endpoint is deprecated. Use /api/dashboard/metrics instead.
 export const getAccountantFacilityOverview: AppRouteHandler<GetAccountantFacilityOverviewRoute> = async (c) => {
   try {
     const userContext = await getUserContext(c);
@@ -105,11 +127,12 @@ export const getAccountantFacilityOverview: AppRouteHandler<GetAccountantFacilit
       facilityIds = userContext.accessibleFacilityIds;
     }
     
-    // Get current reporting period
-    const currentPeriod = await db.query.reportingPeriods.findFirst({
-      where: eq(schema.reportingPeriods.status, 'ACTIVE'),
-      orderBy: (reportingPeriods, { desc }) => [desc(reportingPeriods.year)],
-    });
+    // Get current reporting period using new service
+    const currentPeriod = await getCurrentReportingPeriod();
+
+    if (!currentPeriod) {
+      throw new HTTPException(404, { message: 'No active reporting period found' });
+    }
 
     // Get facility details (primary facility for display)
     const facility = await db.query.facilities.findFirst({
@@ -120,124 +143,76 @@ export const getAccountantFacilityOverview: AppRouteHandler<GetAccountantFacilit
       throw new HTTPException(404, { message: 'Facility not found' });
     }
 
-    // Get planning and execution data for budget calculations (all accessible facilities)
-    const planningData = await db.query.schemaFormDataEntries.findMany({
-      where: and(
-        eq(schema.schemaFormDataEntries.entityType, 'planning'),
-        currentPeriod ? eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id) : undefined
-      ),
+    // Use new service layer to fetch planning and execution entries
+    const planningEntries = await fetchPlanningEntries({
+      facilityIds,
+      reportingPeriodId: currentPeriod.id,
     });
 
-    const executionData = await db.query.schemaFormDataEntries.findMany({
-      where: and(
-        eq(schema.schemaFormDataEntries.entityType, 'execution'),
-        currentPeriod ? eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id) : undefined
-      ),
+    const executionEntries = await fetchExecutionEntries({
+      facilityIds,
+      reportingPeriodId: currentPeriod.id,
     });
 
-    // Filter by accessible facilities
-    const accessiblePlanningData = planningData.filter(p => facilityIds.includes(p.facilityId));
-    const accessibleExecutionData = executionData.filter(e => facilityIds.includes(e.facilityId));
-    
-    // Get all projects for accessible facilities in the current reporting period
-    // First, let's see what projects exist without filtering by status
-    const allProjects = await db.query.projects.findMany({
-      where: currentPeriod ? eq(schema.projects.reportingPeriodId, currentPeriod.id) : undefined,
+    // Get unique project IDs from planning data
+    const projectIdsWithPlanning = [...new Set(planningEntries.map(p => p.projectId))];
+
+    // Fetch project details
+    const projects = await db.query.projects.findMany({
+      where: (projects, { inArray }) => inArray(projects.id, projectIdsWithPlanning)
     });
-    
-    // Now filter by status
-    const projects = allProjects.filter(p => p.status === 'ACTIVE');
 
-    // If no active projects found, but we have planning data, let's include projects that have planning data
-    let finalProjects = projects;
-    if (projects.length === 0 && accessiblePlanningData.length > 0) {
-      const projectIdsWithPlanning = [...new Set(accessiblePlanningData.map(p => p.projectId))];
+    const projectIdToProject = new Map(projects.map(p => [p.id, p]));
 
-      // Try to match from allProjects if any (same reporting period)
-      finalProjects = allProjects.filter(p => projectIdsWithPlanning.includes(p.id));
-
-      // If still empty, fetch projects by IDs regardless of reporting period
-      if (finalProjects.length === 0) {
-        const projectsByIds = await db.query.projects.findMany({
-          where: (projects, { inArray }) => inArray(projects.id, projectIdsWithPlanning)
-        });
-        finalProjects = projectsByIds;
-      }
-
-    }
-
-    // Derive project IDs to report on from planning data for requested facilities
-    const projectIdsWithPlanning = [...new Set(accessiblePlanningData.map(p => p.projectId))];
-
-    // Ensure we have project definitions for those IDs (finalProjects may be empty for this period)
-    let projectsForIds = finalProjects.filter(p => projectIdsWithPlanning.includes(p.id));
-    if (projectsForIds.length !== projectIdsWithPlanning.length) {
-      const missingIds = projectIdsWithPlanning.filter(id => !projectsForIds.some(p => p.id === id));
-      if (missingIds.length > 0) {
-        const fetched = await db.query.projects.findMany({
-          where: (projects, { inArray }) => inArray(projects.id, missingIds)
-        });
-        projectsForIds = [...projectsForIds, ...fetched];
-      }
-    }
-
-    const projectIdToProject = new Map(projectsForIds.map(p => [p.id, p]));
-
-    // Calculate budget by project (using planning/execution entries for facility and project definitions for names)
+    // Calculate budget by project using new service functions
     const projectBreakdown = projectIdsWithPlanning.map(projectId => {
       const project = projectIdToProject.get(projectId);
-      const projectPlanning = accessiblePlanningData.filter(p => p.projectId === projectId);
-      const projectExecution = accessibleExecutionData.filter(e => e.projectId === projectId);
+      const projectPlanning = planningEntries.filter(p => p.projectId === projectId);
+      const projectExecution = executionEntries.filter(e => e.projectId === projectId);
 
-      const allocated = projectPlanning.reduce((sum, entry) => {
-        const budget = calculateBudgetFromFormData(entry.formData, 'planning');
-        return sum + budget;
-      }, 0);
-
-      const spent = projectExecution.reduce((sum, entry) => {
-        const budget = calculateBudgetFromFormData(entry.formData, 'execution');
-        return sum + budget;
-      }, 0);
-
+      const allocated = calculateAllocatedBudget(projectPlanning);
+      const spent = calculateSpentBudget(projectExecution);
       const remaining = allocated - spent;
-      const utilizationPercentage = allocated > 0 ? (spent / allocated) * 100 : 0;
+      const utilizationPercentage = calculateUtilization(allocated, spent);
 
       return {
         projectId,
         projectName: project?.name ?? `Project ${projectId}`,
-        projectCode: project?.code ?? undefined,
+        projectCode: project?.code ?? '',
         allocated,
         spent,
         remaining,
-        utilizationPercentage: Math.round(utilizationPercentage * 100) / 100,
+        utilizationPercentage,
       };
     });
 
-    // Calculate totals
-    const budgetSummary = projectBreakdown.reduce(
-      (summary, project) => ({
-        totalAllocated: summary.totalAllocated + project.allocated,
-        totalSpent: summary.totalSpent + project.spent,
-        totalRemaining: summary.totalRemaining + project.remaining,
-        utilizationPercentage: 0, // Will calculate after
-      }),
-      { totalAllocated: 0, totalSpent: 0, totalRemaining: 0, utilizationPercentage: 0 }
-    );
+    // Calculate totals using new service functions
+    const totalAllocated = calculateAllocatedBudget(planningEntries);
+    const totalSpent = calculateSpentBudget(executionEntries);
+    const totalRemaining = totalAllocated - totalSpent;
+    const utilizationPercentage = calculateUtilization(totalAllocated, totalSpent);
 
-    budgetSummary.utilizationPercentage = 
-      budgetSummary.totalAllocated > 0 
-        ? Math.round((budgetSummary.totalSpent / budgetSummary.totalAllocated) * 100 * 100) / 100
-        : 0;
+    const budgetSummary = {
+      totalAllocated,
+      totalSpent,
+      totalRemaining,
+      utilizationPercentage,
+    };
+
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard/metrics instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
 
     return c.json({
-      currentReportingPeriod: currentPeriod ? {
+      currentReportingPeriod: {
         id: currentPeriod.id,
         year: currentPeriod.year,
         periodType: currentPeriod.periodType || 'ANNUAL',
         startDate: new Date(currentPeriod.startDate).toISOString(),
         endDate: new Date(currentPeriod.endDate).toISOString(),
         status: currentPeriod.status || 'ACTIVE',
-      } : null,
+      },
       facility: {
         id: facility.id,
         name: facility.name,
@@ -402,5 +377,784 @@ export const getAccountantTasks: AppRouteHandler<GetAccountantTasksRoute> = asyn
     }
     
     throw new HTTPException(500, { message: 'Failed to retrieve tasks' });
+  }
+};
+
+// Get Dashboard Metrics
+export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { level, provinceId, districtId, programId, quarter } = c.req.query();
+    
+    // Validate required parameters based on level
+    if (!level) {
+      throw new HTTPException(400, { message: 'Level parameter is required (province or district)' });
+    }
+    
+    if (level === 'province' && !provinceId) {
+      throw new HTTPException(400, { message: 'provinceId is required when level is province' });
+    }
+    
+    if (level === 'district' && !districtId) {
+      throw new HTTPException(400, { message: 'districtId is required when level is district' });
+    }
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        totalAllocated: 0,
+        totalSpent: 0,
+        remaining: 0,
+        utilizationPercentage: 0,
+        reportingPeriod: null,
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Determine facility scope based on level parameter
+    let facilityIds: number[];
+    
+    if (level === 'province') {
+      const provinceIdNum = parseInt(provinceId!);
+      
+      // Validate user has access to this province
+      await validateProvinceAccess(provinceIdNum, userContext);
+      
+      // Get accessible facilities in the province
+      facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
+    } else {
+      // level === 'district'
+      const districtIdNum = parseInt(districtId!);
+      
+      // Validate user has access to this district
+      await validateDistrictAccess(districtIdNum, userContext);
+      
+      // Get accessible facilities in the district
+      facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
+    }
+    
+    // If no accessible facilities, return zeros
+    if (facilityIds.length === 0) {
+      return c.json({
+        totalAllocated: 0,
+        totalSpent: 0,
+        remaining: 0,
+        utilizationPercentage: 0,
+        reportingPeriod: {
+          id: currentPeriod.id,
+          year: currentPeriod.year,
+          periodType: currentPeriod.periodType || 'ANNUAL',
+          startDate: new Date(currentPeriod.startDate).toISOString(),
+          endDate: new Date(currentPeriod.endDate).toISOString(),
+        },
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply program and quarter filters
+    const programIdNum = programId ? parseInt(programId) : undefined;
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Fetch and aggregate planning and execution entries
+    const metrics = await aggregateBudgetData({
+      facilityIds,
+      reportingPeriodId: currentPeriod.id,
+      programId: programIdNum,
+      quarter: quarterNum,
+    });
+    
+    // Return JSON response
+    return c.json({
+      totalAllocated: metrics.allocated,
+      totalSpent: metrics.spent,
+      remaining: metrics.remaining,
+      utilizationPercentage: metrics.utilizationPercentage,
+      reportingPeriod: {
+        id: currentPeriod.id,
+        year: currentPeriod.year,
+        periodType: currentPeriod.periodType || 'ANNUAL',
+        startDate: new Date(currentPeriod.startDate).toISOString(),
+        endDate: new Date(currentPeriod.endDate).toISOString(),
+      },
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get dashboard metrics error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve dashboard metrics' });
+  }
+};
+
+// Get Program Distribution
+export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { level, provinceId, districtId, quarter } = c.req.query();
+    
+    // Validate required parameters based on level
+    if (!level) {
+      throw new HTTPException(400, { message: 'Level parameter is required (province or district)' });
+    }
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        programs: [],
+        total: 0,
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Determine facility scope based on level parameter
+    let facilityIds: number[];
+    
+    if (level === 'province') {
+      if (provinceId) {
+        const provinceIdNum = parseInt(provinceId);
+        
+        // Validate user has access to this province
+        await validateProvinceAccess(provinceIdNum, userContext);
+        
+        // Get accessible facilities in the province
+        facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
+      } else {
+        // No provinceId provided, use all accessible facilities
+        facilityIds = userContext.accessibleFacilityIds;
+      }
+    } else {
+      // level === 'district'
+      if (districtId) {
+        const districtIdNum = parseInt(districtId);
+        
+        // Validate user has access to this district
+        await validateDistrictAccess(districtIdNum, userContext);
+        
+        // Get accessible facilities in the district
+        facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
+      } else {
+        // No districtId provided, use all accessible facilities
+        facilityIds = userContext.accessibleFacilityIds;
+      }
+    }
+    
+    // If no accessible facilities, return empty
+    if (facilityIds.length === 0) {
+      return c.json({
+        programs: [],
+        total: 0,
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply quarter filter
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Fetch planning entries for the facilities
+    const planningConditions = [
+      eq(schema.schemaFormDataEntries.entityType, 'planning'),
+      eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id),
+    ];
+    
+    // Apply quarter filter if provided
+    if (quarterNum !== undefined) {
+      planningConditions.push(
+        eq(schema.schemaFormDataEntries.metadata, { quarter: quarterNum })
+      );
+    }
+    
+    const planningEntries = await db.query.schemaFormDataEntries.findMany({
+      where: and(...planningConditions),
+      with: {
+        project: true,
+      },
+    });
+    
+    // Filter by accessible facilities
+    const accessiblePlanningEntries = planningEntries.filter(entry => 
+      facilityIds.includes(entry.facilityId)
+    );
+    
+    // Group by project_type (program)
+    const entriesByProgram = accessiblePlanningEntries.reduce((acc, entry) => {
+      const programType = entry.project?.projectType || 'unknown';
+      if (!acc[programType]) {
+        acc[programType] = [];
+      }
+      acc[programType].push(entry);
+      return acc;
+    }, {} as Record<string, typeof accessiblePlanningEntries>);
+    
+    // Calculate allocated budget per program
+    const programBudgets = Object.entries(entriesByProgram).map(([programType, entries]) => {
+      const allocatedBudget = entries.reduce((sum, entry) => {
+        const budget = calculateBudgetFromFormData(entry.formData, 'planning');
+        return sum + budget;
+      }, 0);
+      
+      // Get program name from first project (or use programType as fallback)
+      const programName = entries[0]?.project?.name || `Program ${programType}`;
+      
+      return {
+        programId: parseInt(programType) || 0,
+        programName,
+        allocatedBudget,
+      };
+    });
+    
+    // Calculate total
+    const total = programBudgets.reduce((sum, program) => sum + program.allocatedBudget, 0);
+    
+    // Calculate percentage of total
+    const programsWithPercentage = programBudgets.map(program => ({
+      ...program,
+      percentage: total > 0 ? Math.round((program.allocatedBudget / total) * 100 * 100) / 100 : 0,
+    }));
+    
+    // Sort by allocated budget descending
+    const sortedPrograms = programsWithPercentage.sort((a, b) => b.allocatedBudget - a.allocatedBudget);
+    
+    // Return JSON response
+    return c.json({
+      programs: sortedPrograms,
+      total,
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get program distribution error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve program distribution' });
+  }
+};
+
+// Get Budget by District
+export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { provinceId, programId, quarter } = c.req.query();
+    
+    // Validate required parameters
+    if (!provinceId) {
+      throw new HTTPException(400, { message: 'provinceId parameter is required' });
+    }
+    
+    const provinceIdNum = parseInt(provinceId);
+    
+    // Validate user has access to this province
+    await validateProvinceAccess(provinceIdNum, userContext);
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        districts: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Get accessible facilities in the province
+    const facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
+    
+    // If no accessible facilities, return empty
+    if (facilityIds.length === 0) {
+      return c.json({
+        districts: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply program and quarter filters
+    const programIdNum = programId ? parseInt(programId) : undefined;
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Aggregate budget data by district
+    const districtBudgets = await aggregateByDistrict(
+      provinceIdNum,
+      facilityIds,
+      currentPeriod.id,
+      programIdNum,
+      quarterNum
+    );
+    
+    // Transform to response format
+    const districts = districtBudgets.map(district => ({
+      districtId: district.districtId,
+      districtName: district.districtName,
+      allocatedBudget: district.allocated,
+      spentBudget: district.spent,
+      utilizationPercentage: district.utilizationPercentage,
+    }));
+    
+    // Return JSON response
+    return c.json({
+      districts,
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get budget by district error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve budget by district' });
+  }
+};
+
+// Get Budget by Facility
+export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { districtId, programId, quarter } = c.req.query();
+    
+    // Validate required parameters
+    if (!districtId) {
+      throw new HTTPException(400, { message: 'districtId parameter is required' });
+    }
+    
+    const districtIdNum = parseInt(districtId);
+    
+    // Validate user has access to this district
+    await validateDistrictAccess(districtIdNum, userContext);
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        facilities: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Get accessible facilities in the district
+    const facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
+    
+    // If no accessible facilities, return empty
+    if (facilityIds.length === 0) {
+      return c.json({
+        facilities: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply program and quarter filters
+    const programIdNum = programId ? parseInt(programId) : undefined;
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Aggregate budget data by facility
+    const facilityBudgets = await aggregateByFacility(
+      districtIdNum,
+      facilityIds,
+      currentPeriod.id,
+      programIdNum,
+      quarterNum
+    );
+    
+    // Transform to response format
+    const facilities = facilityBudgets.map(facility => ({
+      facilityId: facility.facilityId,
+      facilityName: facility.facilityName,
+      facilityType: facility.facilityType,
+      allocatedBudget: facility.allocated,
+      spentBudget: facility.spent,
+      utilizationPercentage: facility.utilizationPercentage,
+    }));
+    
+    // Return JSON response
+    return c.json({
+      facilities,
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get budget by facility error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve budget by facility' });
+  }
+};
+
+// Get Province Approval Summary
+export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSummaryRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { provinceId, programId, quarter } = c.req.query();
+    
+    // Validate required parameters
+    if (!provinceId) {
+      throw new HTTPException(400, { message: 'provinceId parameter is required' });
+    }
+    
+    const provinceIdNum = parseInt(provinceId);
+    
+    // Validate user has access to this province
+    await validateProvinceAccess(provinceIdNum, userContext);
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        districts: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Get accessible facilities in the province
+    const facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
+    
+    // If no accessible facilities, return empty
+    if (facilityIds.length === 0) {
+      return c.json({
+        districts: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply program and quarter filters
+    const programIdNum = programId ? parseInt(programId) : undefined;
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Get all districts in the province
+    const provinceDistricts = await db.query.districts.findMany({
+      where: eq(schema.districts.provinceId, provinceIdNum),
+    });
+    
+    // Fetch all facilities properly
+    const allDistrictFacilities = await db.query.facilities.findMany({
+      where: eq(schema.facilities.status, 'ACTIVE'),
+    });
+    
+    // Filter to only facilities in our districts and accessible to user
+    const accessibleDistrictFacilities = allDistrictFacilities.filter(
+      f => f.districtId && 
+           provinceDistricts.some(d => d.id === f.districtId) &&
+           facilityIds.includes(f.id)
+    );
+    
+    // Group facilities by district
+    const facilitiesByDistrict = accessibleDistrictFacilities.reduce((acc, facility) => {
+      if (!facility.districtId) return acc;
+      if (!acc[facility.districtId]) {
+        acc[facility.districtId] = [];
+      }
+      acc[facility.districtId].push(facility.id);
+      return acc;
+    }, {} as Record<number, number[]>);
+    
+    // Build conditions for fetching planning entries
+    const planningConditions = [
+      eq(schema.schemaFormDataEntries.entityType, 'planning'),
+      eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id),
+    ];
+    
+    // Apply quarter filter if provided
+    if (quarterNum !== undefined) {
+      planningConditions.push(
+        sql`${schema.schemaFormDataEntries.metadata}->>'quarter' = ${quarterNum.toString()}`
+      );
+    }
+    
+    // Fetch all planning entries for accessible facilities
+    let planningEntries = await db.query.schemaFormDataEntries.findMany({
+      where: and(...planningConditions),
+      with: {
+        project: true,
+      },
+    });
+    
+    // Filter by accessible facilities
+    planningEntries = planningEntries.filter(entry => facilityIds.includes(entry.facilityId));
+    
+    // Apply program filter if provided
+    if (programIdNum !== undefined) {
+      const programIdStr = programIdNum.toString();
+      planningEntries = planningEntries.filter(entry => entry.project?.projectType === programIdStr);
+    }
+    
+    // For each district, count planning entries by status
+    const districtApprovals = await Promise.all(
+      provinceDistricts.map(async (district) => {
+        const districtFacilityIds = facilitiesByDistrict[district.id] || [];
+        
+        // Filter planning entries for this district
+        const districtPlanningEntries = planningEntries.filter(entry => 
+          districtFacilityIds.includes(entry.facilityId)
+        );
+        
+        // Count by approval status
+        const approvedCount = districtPlanningEntries.filter(
+          entry => entry.approvalStatus === 'APPROVED'
+        ).length;
+        
+        const rejectedCount = districtPlanningEntries.filter(
+          entry => entry.approvalStatus === 'REJECTED'
+        ).length;
+        
+        const pendingCount = districtPlanningEntries.filter(
+          entry => entry.approvalStatus === 'PENDING' || !entry.approvalStatus
+        ).length;
+        
+        const totalCount = districtPlanningEntries.length;
+        
+        // Calculate approval rate (approvedCount ÷ totalCount × 100)
+        const approvalRate = totalCount > 0 
+          ? Math.round((approvedCount / totalCount) * 100 * 100) / 100 
+          : 0;
+        
+        // Sum allocated budgets
+        const allocatedBudget = districtPlanningEntries.reduce((sum, entry) => {
+          const budget = calculateBudgetFromFormData(entry.formData, 'planning');
+          return sum + budget;
+        }, 0);
+        
+        return {
+          districtId: district.id,
+          districtName: district.name,
+          allocatedBudget,
+          approvedCount,
+          rejectedCount,
+          pendingCount,
+          totalCount,
+          approvalRate,
+        };
+      })
+    );
+    
+    // Sort by district name
+    const sortedDistricts = districtApprovals.sort((a, b) => 
+      a.districtName.localeCompare(b.districtName)
+    );
+    
+    // Return JSON response
+    return c.json({
+      districts: sortedDistricts,
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get province approval summary error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve province approval summary' });
+  }
+};
+
+// Get District Approval Details
+export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDetailsRoute> = async (c) => {
+  try {
+    // Validate user session
+    const userContext = await getUserContext(c);
+    
+    // Get query parameters
+    const { districtId, programId, quarter } = c.req.query();
+    
+    // Validate required parameters
+    if (!districtId) {
+      throw new HTTPException(400, { message: 'districtId parameter is required' });
+    }
+    
+    const districtIdNum = parseInt(districtId);
+    
+    // Validate user has access to this district
+    await validateDistrictAccess(districtIdNum, userContext);
+    
+    // Get current active reporting period
+    const currentPeriod = await getCurrentReportingPeriod();
+    
+    if (!currentPeriod) {
+      return c.json({
+        facilities: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Get accessible facilities in the district
+    const facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
+    
+    // If no accessible facilities, return empty
+    if (facilityIds.length === 0) {
+      return c.json({
+        facilities: [],
+      }, HttpStatusCodes.OK);
+    }
+    
+    // Apply program and quarter filters
+    const programIdNum = programId ? parseInt(programId) : undefined;
+    const quarterNum = quarter ? parseInt(quarter) : undefined;
+    
+    // Validate quarter is between 1-4
+    if (quarterNum !== undefined && (quarterNum < 1 || quarterNum > 4)) {
+      throw new HTTPException(400, { message: 'Quarter must be between 1 and 4' });
+    }
+    
+    // Fetch facilities in district
+    const districtFacilities = await db.query.facilities.findMany({
+      where: and(
+        eq(schema.facilities.districtId, districtIdNum),
+        eq(schema.facilities.status, 'ACTIVE')
+      ),
+    });
+    
+    // Filter to only accessible facilities
+    const accessibleFacilities = districtFacilities.filter(f => facilityIds.includes(f.id));
+    
+    // Build conditions for fetching planning entries
+    const planningConditions = [
+      eq(schema.schemaFormDataEntries.entityType, 'planning'),
+      eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id),
+    ];
+    
+    // Apply quarter filter if provided
+    if (quarterNum !== undefined) {
+      planningConditions.push(
+        sql`${schema.schemaFormDataEntries.metadata}->>'quarter' = ${quarterNum.toString()}`
+      );
+    }
+    
+    // Fetch planning entries with project details
+    let planningEntries = await db.query.schemaFormDataEntries.findMany({
+      where: and(...planningConditions),
+      with: {
+        project: true,
+      },
+    });
+    
+    // Filter by accessible facilities
+    planningEntries = planningEntries.filter(entry => facilityIds.includes(entry.facilityId));
+    
+    // Apply program filter if provided
+    if (programIdNum !== undefined) {
+      const programIdStr = programIdNum.toString();
+      planningEntries = planningEntries.filter(entry => entry.project?.projectType === programIdStr);
+    }
+    
+    // Build facility approval details
+    const facilityApprovals = planningEntries.map(entry => {
+      const facility = accessibleFacilities.find(f => f.id === entry.facilityId);
+      const project = entry.project;
+      
+      // Extract approval metadata from JSONB
+      const metadata = entry.metadata as any || {};
+      const approvedBy = metadata.approvedBy || null;
+      const approvedAt = metadata.approvedAt || null;
+      const entryQuarter = metadata.quarter || null;
+      
+      // Calculate allocated budget
+      const allocatedBudget = calculateBudgetFromFormData(entry.formData, 'planning');
+      
+      // Determine approval status
+      const approvalStatus = entry.approvalStatus || 'PENDING';
+      
+      return {
+        facilityId: entry.facilityId,
+        facilityName: facility?.name || `Facility ${entry.facilityId}`,
+        projectId: entry.projectId,
+        projectName: project?.name || `Project ${entry.projectId}`,
+        projectCode: project?.code || '',
+        allocatedBudget,
+        approvalStatus: approvalStatus as 'APPROVED' | 'PENDING' | 'REJECTED',
+        approvedBy,
+        approvedAt,
+        quarter: entryQuarter,
+      };
+    });
+    
+    // Sort by facility name, then project name
+    const sortedApprovals = facilityApprovals.sort((a, b) => {
+      const facilityCompare = a.facilityName.localeCompare(b.facilityName);
+      if (facilityCompare !== 0) return facilityCompare;
+      return a.projectName.localeCompare(b.projectName);
+    });
+    
+    // Return JSON response
+    return c.json({
+      facilities: sortedApprovals,
+    }, HttpStatusCodes.OK);
+    
+  } catch (error: any) {
+    console.error('Get district approval details error:', error);
+    
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    
+    // Handle access control errors
+    if (error.message?.includes('Access denied')) {
+      throw new HTTPException(403, { message: error.message });
+    }
+    
+    throw new HTTPException(500, { message: 'Failed to retrieve district approval details' });
   }
 };

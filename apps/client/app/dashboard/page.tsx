@@ -1,9 +1,13 @@
 "use client";
 
-import { AccountantDashboard } from "@/components/dashboard/AccountantDashboard";
+import { EnhancedDashboard } from "@/components/dashboard/EnhancedDashboard";
 
 const DashboardPage = () => {
-  return <AccountantDashboard />;
+  return (
+    <div className="container mx-auto p-2">
+      <EnhancedDashboard />
+    </div>
+  );
 };
 
 export default DashboardPage;

@@ -12,6 +12,7 @@ import {
   configurableEventMappings,
   statementTemplates,
   financialReports,
+  financialReportWorkflowLogs,
   schemaFormDataEntries,
   systemConfigurations,
   configurationAuditLog,
@@ -61,6 +62,9 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   updatedReports: many(financialReports, { relationName: "report_updater" }),
   submittedReports: many(financialReports, { relationName: "report_submitter" }),
   approvedReports: many(financialReports, { relationName: "report_approver" }),
+  dafApprovedReports: many(financialReports, { relationName: "report_daf_approver" }),
+  dgApprovedReports: many(financialReports, { relationName: "report_dg_approver" }),
+  workflowActions: many(financialReportWorkflowLogs, { relationName: "workflow_actor" }),
   formDataEntries: many(schemaFormDataEntries, { relationName: "form_data_creator" }),
   auditLogs: many(configurationAuditLog),
   approvalActions: many(approvalAuditLog, { relationName: "approval_action_by" }),
@@ -146,7 +150,7 @@ export const statementTemplatesRelations = relations(statementTemplates, ({ one,
   }),
 }));
 
-export const financialReportsRelations = relations(financialReports, ({ one }) => ({
+export const financialReportsRelations = relations(financialReports, ({ one, many }) => ({
   project: one(projects, {
     fields: [financialReports.projectId],
     references: [projects.id]
@@ -179,6 +183,17 @@ export const financialReportsRelations = relations(financialReports, ({ one }) =
     references: [users.id],
     relationName: "report_approver"
   }),
+  dafApprover: one(users, {
+    fields: [financialReports.dafId],
+    references: [users.id],
+    relationName: "report_daf_approver"
+  }),
+  dgApprover: one(users, {
+    fields: [financialReports.dgId],
+    references: [users.id],
+    relationName: "report_dg_approver"
+  }),
+  workflowLogs: many(financialReportWorkflowLogs, { relationName: "report_workflow_history" }),
 }));
 
 export const schemaFormDataEntriesRelations = relations(schemaFormDataEntries, ({ one, many }) => ({
@@ -302,5 +317,18 @@ export const approvalAuditLogRelations = relations(approvalAuditLog, ({ one }) =
     fields: [approvalAuditLog.actionBy],
     references: [users.id],
     relationName: "approval_action_by"
+  }),
+}));
+
+export const financialReportWorkflowLogsRelations = relations(financialReportWorkflowLogs, ({ one }) => ({
+  report: one(financialReports, {
+    fields: [financialReportWorkflowLogs.reportId],
+    references: [financialReports.id],
+    relationName: "report_workflow_history"
+  }),
+  actor: one(users, {
+    fields: [financialReportWorkflowLogs.actorId],
+    references: [users.id],
+    relationName: "workflow_actor"
   }),
 }));

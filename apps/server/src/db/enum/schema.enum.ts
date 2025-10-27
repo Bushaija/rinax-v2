@@ -15,7 +15,9 @@ export const userRole = pgEnum("user_role", [
     "accountant", 
     "admin", 
     "superadmin",
-    "program_manager"
+    "program_manager",
+    "daf",
+    "dg"
 ]);
 
 export const formFieldType = pgEnum("form_field_type", [
@@ -52,7 +54,12 @@ export const reportStatus = pgEnum("report_status", [
     "draft",
     "submitted",
     "approved",
-    "rejected"
+    "rejected",
+    "pending_daf_approval",
+    "rejected_by_daf",
+    "approved_by_daf",
+    "rejected_by_dg",
+    "fully_approved"
 ]);
 
 export const moduleType = pgEnum("module_type", [
@@ -80,5 +87,13 @@ export const approvalStatus = pgEnum("approval_status", [
     "APPROVED",
     "REJECTED",
     "DRAFT"
+]);
+
+export const workflowAction = pgEnum("workflow_action", [
+    "submitted",
+    "daf_approved",
+    "daf_rejected",
+    "dg_approved",
+    "dg_rejected"
 ]);
 

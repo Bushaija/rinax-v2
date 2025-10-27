@@ -297,12 +297,40 @@ export class DataAggregationEngine implements EventDataProcessor {
 
   /**
    * Collect data using traditional entity_id approach
+   * Optimized for single-facility queries (Requirement 8.1, 8.2, 8.3)
    */
   private async collectTraditionalData(
     filters: DataFilters,
     targetPeriodId: number,
     eventFilter: any
   ): Promise<EventEntry[]> {
+    const queryStartTime = Date.now();
+
+    // Build facility filter condition - optimize for single facility vs multiple facilities
+    let facilityFilter;
+    let facilityFilterType: 'single' | 'multiple' | 'none' = 'none';
+    
+    if (filters.facilityIds && filters.facilityIds.length > 0) {
+      // Use facilityIds array if provided (supports aggregation levels)
+      if (filters.facilityIds.length === 1) {
+        // Single facility: Use = operator for better index utilization (Requirement 8.1, 8.2)
+        facilityFilter = eq(schemaFormDataEntries.facilityId, filters.facilityIds[0]);
+        facilityFilterType = 'single';
+      } else {
+        // Multiple facilities: Use IN clause (Requirement 8.3)
+        facilityFilter = inArray(schemaFormDataEntries.facilityId, filters.facilityIds);
+        facilityFilterType = 'multiple';
+      }
+    } else if (filters.facilityId) {
+      // Backward compatibility: single facilityId field
+      facilityFilter = eq(schemaFormDataEntries.facilityId, filters.facilityId);
+      facilityFilterType = 'single';
+    } else {
+      // No facility filter
+      facilityFilter = undefined;
+      facilityFilterType = 'none';
+    }
+
     const query = this.db
       .select({
         eventCode: events.code,
@@ -318,7 +346,7 @@ export class DataAggregationEngine implements EventDataProcessor {
         eq(configurableEventMappings.eventId, events.id))
       .where(and(
         eq(schemaFormDataEntries.projectId, filters.projectId),
-        filters.facilityId ? eq(schemaFormDataEntries.facilityId, filters.facilityId) : undefined,
+        facilityFilter, // Use optimized facility filter
         eq(schemaFormDataEntries.reportingPeriodId, targetPeriodId),
         inArray(schemaFormDataEntries.entityType, filters.entityTypes),
         eventFilter,
@@ -326,6 +354,13 @@ export class DataAggregationEngine implements EventDataProcessor {
       ));
 
     const results = await query;
+    
+    const queryExecutionTime = Date.now() - queryStartTime;
+    
+    // Log query execution time by facility filter type (Requirement 8.4)
+    console.log(`[Query Performance] Traditional data collection - Filter: ${facilityFilterType}, ` +
+                `Facilities: ${filters.facilityIds?.length || (filters.facilityId ? 1 : 0)}, ` +
+                `Results: ${results.length}, Time: ${queryExecutionTime}ms`);
 
     return results.map(result => ({
       eventCode: result.eventCode,
@@ -345,10 +380,36 @@ export class DataAggregationEngine implements EventDataProcessor {
     eventFilter: any
   ): Promise<EventEntry[]> {
     try {
+      const queryStartTime = Date.now();
+      
       // Use the project ID from filters (already validated in the handler)
       const projectId = filters.projectId;
 
       console.log(`[CollectQuarterlyJSON] Project: ${projectId}, Period: ${targetPeriodId}, Types: ${filters.entityTypes.join(',')}`)
+
+      // Build facility filter condition - optimize for single facility vs multiple facilities
+      let facilityFilter;
+      let facilityFilterType: 'single' | 'multiple' | 'none' = 'none';
+      
+      if (filters.facilityIds && filters.facilityIds.length > 0) {
+        if (filters.facilityIds.length === 1) {
+          // Single facility: Use = operator for better index utilization (Requirement 8.1, 8.2)
+          facilityFilter = eq(schemaFormDataEntries.facilityId, filters.facilityIds[0]);
+          facilityFilterType = 'single';
+        } else {
+          // Multiple facilities: Use IN clause (Requirement 8.3)
+          facilityFilter = inArray(schemaFormDataEntries.facilityId, filters.facilityIds);
+          facilityFilterType = 'multiple';
+        }
+      } else if (filters.facilityId) {
+        // Backward compatibility: single facilityId field
+        facilityFilter = eq(schemaFormDataEntries.facilityId, filters.facilityId);
+        facilityFilterType = 'single';
+      } else {
+        // No facility filter
+        facilityFilter = undefined;
+        facilityFilterType = 'none';
+      }
 
       // Query for quarterly JSON data entries
       const jsonDataQuery = this.db
@@ -361,9 +422,7 @@ export class DataAggregationEngine implements EventDataProcessor {
         .from(schemaFormDataEntries)
         .where(and(
           eq(schemaFormDataEntries.projectId, projectId),
-          filters.facilityIds?.length
-            ? inArray(schemaFormDataEntries.facilityId, filters.facilityIds)
-            : undefined,
+          facilityFilter, // Use optimized facility filter
           eq(schemaFormDataEntries.reportingPeriodId, targetPeriodId),
           inArray(schemaFormDataEntries.entityType, filters.entityTypes),
           sql`${schemaFormDataEntries.entityId} IS NULL`, // Only JSON data
@@ -371,6 +430,14 @@ export class DataAggregationEngine implements EventDataProcessor {
         ));
 
       const jsonResults = await jsonDataQuery;
+      
+      const queryExecutionTime = Date.now() - queryStartTime;
+      
+      // Log query execution time by facility filter type (Requirement 8.4)
+      console.log(`[Query Performance] Quarterly JSON data collection - Filter: ${facilityFilterType}, ` +
+                  `Facilities: ${filters.facilityIds?.length || (filters.facilityId ? 1 : 0)}, ` +
+                  `Results: ${jsonResults.length}, Time: ${queryExecutionTime}ms`);
+      
       console.log(`Found ${jsonResults.length} quarterly JSON entries`);
 
       if (jsonResults.length === 0) {

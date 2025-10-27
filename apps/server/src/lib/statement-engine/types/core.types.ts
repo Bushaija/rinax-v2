@@ -170,6 +170,8 @@ export interface FinancialStatementResponse {
   statement: StatementInfo;
   validation: ValidationResults;
   performance: PerformanceMetrics;
+  aggregationMetadata?: any; // NEW: Aggregation metadata for facility-level statements
+  facilityBreakdown?: any[]; // NEW: Optional facility breakdown for aggregated statements
 }
 
 export interface StatementInfo {
@@ -289,6 +291,12 @@ export interface PerformanceMetrics {
   linesProcessed: number;
   eventsProcessed: number;
   formulasCalculated: number;
+  // Performance logging for aggregation levels (Requirement 8.4, 8.5)
+  aggregationLevel?: 'FACILITY' | 'DISTRICT' | 'PROVINCE';
+  queryExecutionTimeMs?: number;
+  dataCollectionTimeMs?: number;
+  facilityBreakdownTimeMs?: number;
+  aggregationMetadataTimeMs?: number;
 }
 
 // ============================================================================

@@ -34,3 +34,4 @@ export { useGetExecutionSchema } from "./executions/use-get-execution-schema";
 // dashboard queries
 export { useGetFacilityOverview } from "./dashboard/use-get-facility-overview";
 export { useGetTasks } from "./dashboard/use-get-tasks";
+export { useGetMetrics } from "./dashboard/use-get-metrics";

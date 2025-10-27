@@ -5,7 +5,9 @@ import {
     timestamp, 
     varchar,
     jsonb,
-    foreignKey
+    foreignKey,
+    boolean,
+    text
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -39,6 +41,15 @@ export const financialReports = pgTable("financial_reports", {
     submittedAt: timestamp("submitted_at", { mode: 'date' }),
     approvedBy: integer("approved_by"),
     approvedAt: timestamp("approved_at", { mode: 'date' }),
+    // Approval workflow fields
+    dafId: integer("daf_id"),
+    dafApprovedAt: timestamp("daf_approved_at", { mode: 'date' }),
+    dafComment: text("daf_comment"),
+    dgId: integer("dg_id"),
+    dgApprovedAt: timestamp("dg_approved_at", { mode: 'date' }),
+    dgComment: text("dg_comment"),
+    finalPdfUrl: text("final_pdf_url"),
+    locked: boolean("locked").default(false),
   }, (table) => [
     foreignKey({
       columns: [table.projectId],
@@ -59,5 +70,15 @@ export const financialReports = pgTable("financial_reports", {
       columns: [table.createdBy],
       foreignColumns: [users.id],
       name: "financial_reports_created_by_fkey"
+    }),
+    foreignKey({
+      columns: [table.dafId],
+      foreignColumns: [users.id],
+      name: "financial_reports_daf_id_fkey"
+    }),
+    foreignKey({
+      columns: [table.dgId],
+      foreignColumns: [users.id],
+      name: "financial_reports_dg_id_fkey"
     }),
   ])
