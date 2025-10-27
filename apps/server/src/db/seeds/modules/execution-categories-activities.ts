@@ -45,7 +45,6 @@ function toDbProjectType(projectType: 'HIV' | 'MAL' | 'TB'): 'HIV' | 'Malaria' |
     }
 }
 
-// ENHANCED: HIV execution activities with facility targeting
 const hivActivities: ActivityData[] = [
     // A. Receipts (applicable to both facility types)
     { categoryCode: 'A', subCategoryCode: null, name: 'Other Incomes', displayOrder: 1, isTotalRow: false, activityType: 'REVENUE', applicableTo: 'both' },
@@ -66,10 +65,14 @@ const hivActivities: ActivityData[] = [
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Overheads (facility-specific variations)
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    
+    // receivables
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Airtime', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Internet', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -108,7 +111,6 @@ const hivActivities: ActivityData[] = [
     { categoryCode: 'G', subCategoryCode: null, name: 'G. Closing Balance', displayOrder: 4, isTotalRow: true, activityType: 'EQUITY_TOTAL', applicableTo: 'both' },
 ];
 
-// ENHANCED: Malaria execution activities with facility targeting
 const malariaActivities: ActivityData[] = [
     // A. Receipts (applicable to both facility types)
     { categoryCode: 'A', subCategoryCode: null, name: 'Other Incomes', displayOrder: 1, isTotalRow: false, activityType: 'REVENUE', applicableTo: 'both' },
@@ -129,10 +131,12 @@ const malariaActivities: ActivityData[] = [
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Overheads (facility-specific variations)
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Airtime', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Internet', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -171,7 +175,6 @@ const malariaActivities: ActivityData[] = [
     { categoryCode: 'G', subCategoryCode: null, name: 'G. Closing Balance', displayOrder: 4, isTotalRow: true, activityType: 'EQUITY_TOTAL', applicableTo: 'both' },
 ];
 
-// ENHANCED: TB execution activities with facility targeting
 const tbActivities: ActivityData[] = [
     // A. Receipts (applicable to both facility types)
     { categoryCode: 'A', subCategoryCode: null, name: 'Other Incomes', displayOrder: 1, isTotalRow: false, activityType: 'REVENUE', applicableTo: 'both' },
@@ -192,10 +195,12 @@ const tbActivities: ActivityData[] = [
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Overheads (facility-specific variations)
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
-    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Airtime', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Internet', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Infrastructure support', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Office supplies', displayOrder: 4, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Transport and travel (Reporting)', displayOrder: 5, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
+    { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Bank charges', displayOrder: 6, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Transfer to other entities (both)
     { categoryCode: 'B', subCategoryCode: 'B-05', name: 'Transfer to RBC', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
