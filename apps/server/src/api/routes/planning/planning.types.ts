@@ -105,19 +105,21 @@ export const validatePlanningDataSchema = z.object({
 
 // Query parameters with approval status filter
 export const planningListQuerySchema = z.object({
-  projectId: z.string().optional(),
-  facilityId: z.string().optional(),
-  reportingPeriodId: z.string().optional(),
-  facilityType: z.enum(['hospital', 'health_center']).optional(),
-  projectType: z.enum(['HIV', 'Malaria', 'TB']).optional(),
-  reportingPeriod: z.string().optional(),
-  categoryId: z.string().optional(),
-  year: z.string().optional(),
+  projectId: z.string().optional().describe("Filter by specific project ID"),
+  facilityId: z.string().optional().describe("Filter by specific facility ID"),
+  reportingPeriodId: z.string().optional().describe("Filter by specific reporting period ID"),
+  facilityType: z.enum(['hospital', 'health_center']).optional().describe("Filter by facility type"),
+  projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Filter by project type"),
+  reportingPeriod: z.string().optional().describe("Filter by reporting period year (e.g., '2024')"),
+  categoryId: z.string().optional().describe("Filter by specific category ID"),
+  year: z.string().optional().describe("Filter by year"),
   // New approval filter
-  approvalStatus: approvalStatusEnum.optional(),
+  approvalStatus: approvalStatusEnum.optional().describe("Filter by approval status"),
+  // District filtering for admin users
+  districtId: z.string().optional().describe("Filter by district ID (admin users only - ignored for non-admin users)"),
   // Pagination
-  page: z.string().default('1'),
-  limit: z.string().default('20'),
+  page: z.string().default('1').describe("Page number for pagination"),
+  limit: z.string().default('20').describe("Number of items per page"),
 });
 
 // File parsing result
@@ -149,3 +151,22 @@ export type SubmitForApproval = z.infer<typeof submitForApprovalSchema>;
 export type ReviewPlanning = z.infer<typeof reviewPlanningSchema>;
 export type BulkReviewPlanning = z.infer<typeof bulkReviewPlanningSchema>;
 export type FileParsedData = z.infer<typeof fileParsedDataSchema>;
+
+// District information for admin users
+export interface DistrictInfo {
+  id: number;
+  name: string;
+}
+
+// Extended planning data with district information for admin users
+export interface PlanningDataWithDistrict extends SelectPlanningData {
+  district?: DistrictInfo | null;
+}
+
+// Schema for planning data that may include district information (for admin users)
+export const selectPlanningDataWithDistrictSchema = selectPlanningDataSchema.extend({
+  district: z.object({
+    id: z.number().int().describe("District ID"),
+    name: z.string().describe("District name"),
+  }).nullable().optional().describe("District information (only available for admin users)"),
+});

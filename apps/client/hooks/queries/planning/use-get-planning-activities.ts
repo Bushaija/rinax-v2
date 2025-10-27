@@ -13,6 +13,7 @@ interface GetPlanningActivitiesParams {
   reportingPeriod?: string; // e.g., "2024"
   categoryId?: string;
   year?: string;
+  districtId?: string; // District filtering for admin users
 }
 
 function useGetPlanningActivities(params: GetPlanningActivitiesParams = {}) {
@@ -32,6 +33,7 @@ function useGetPlanningActivities(params: GetPlanningActivitiesParams = {}) {
         reportingPeriod: params.reportingPeriod,
         categoryId: params.categoryId,
         year: params.year,
+        districtId: params.districtId,
       },
     ],
     staleTime: 5 * 60 * 1000, // 5 minutes

@@ -5,6 +5,7 @@ export function useGetDistricts(params?: GetDistrictsRequest) {
   return useQuery({
     queryKey: ['districts', params?.provinceId],
     queryFn: () => getDistricts(params),
-    enabled: params?.provinceId ? true : false,
+    // Enable the query even without provinceId to fetch all districts for admin users
+    enabled: true,
   });
 }

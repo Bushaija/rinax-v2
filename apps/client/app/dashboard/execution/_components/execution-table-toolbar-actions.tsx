@@ -3,13 +3,22 @@
 import * as React from "react"
 import type { Table } from "@tanstack/react-table"
 import type { ExecutionActivity } from "./execution-table-columns"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Download, FileText } from "lucide-react"
+import { Download, FileText, Filter } from "lucide-react"
 import { FacilityFilterDialog } from "@/features/shared/facility-filter-dialog2"
 import { useUser } from "@/components/providers/session-provider"
 import type { CreateExecutionArgs } from "@/types/facility";
 import { useGetCurrentReportingPeriod } from "@/hooks/queries/reporting-period/use-get-current-reporting-period"
+import { useGetDistricts } from "@/hooks/queries/districts/use-get-districts"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 interface ExecutionTableToolbarActionsProps {
   table: Table<ExecutionActivity>;
@@ -17,6 +26,7 @@ interface ExecutionTableToolbarActionsProps {
   getFacilityTypes: (program?: string) => any[];
   districtId: number;
   quarter?: string;
+  isAdmin?: boolean;
 }
 
 export function ExecutionTableToolbarActions({ 
@@ -24,12 +34,24 @@ export function ExecutionTableToolbarActions({
   programs, 
   getFacilityTypes,
   districtId,
+  isAdmin = false,
 }: ExecutionTableToolbarActionsProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const user = useUser();
   const isAccountant = (user as any)?.role === 'accountant';
   const { data: currentReportingPeriod } = useGetCurrentReportingPeriod();
+  
+  // Get current district filter from URL
+  const currentDistrictFilter = searchParams.get('districtId') || '';
+  
+  // Fetch districts for admin users (we'll need to determine the province)
+  // For now, let's fetch all districts (this might need to be adjusted based on user's province)
+  const { data: districts } = useGetDistricts({ 
+    // If we need to filter by province, we can add provinceId here
+    // provinceId: user?.provinceId 
+  });
   const handleCreateExecution = (args: CreateExecutionArgs) => {
     // Navigate to create page with the selected parameters
     const searchParams = new URLSearchParams({
@@ -57,8 +79,48 @@ export function ExecutionTableToolbarActions({
     console.log("Generate comprehensive report");
   };
 
+  const handleDistrictFilterChange = (districtId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (districtId && districtId !== 'all') {
+      params.set('districtId', districtId);
+    } else {
+      params.delete('districtId');
+    }
+    
+    // Reset to first page when filter changes
+    params.set('page', '1');
+    
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <div className="flex items-center gap-2">
+      {/* District Filter - Only show for admin users */}
+      {isAdmin && (
+        <div className="flex items-center gap-2 h-2">
+          {/* <Label htmlFor="district-filter" className="text-sm font-medium">
+            District:
+          </Label> */}
+          <Select
+            value={currentDistrictFilter || 'all'}
+            onValueChange={handleDistrictFilterChange}
+          >
+            <SelectTrigger className="w-[120px] h-2">
+              <SelectValue placeholder="All Districts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Districts</SelectItem>
+              {districts?.map((district) => (
+                <SelectItem key={district.id} value={district.id.toString()}>
+                  {district.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      
       {isAccountant ? (
         <FacilityFilterDialog
           label="New Execution"
@@ -71,12 +133,10 @@ export function ExecutionTableToolbarActions({
           districtId={districtId}
         />
       ) : (
-        <Button variant="outline" size="sm" className="h-8" disabled>
-          New Execution
-        </Button>
+       <div />
       )}
       
-      <Button
+      {/* <Button
         onClick={handleExportAll}
         variant="outline"
         size="sm"
@@ -94,7 +154,7 @@ export function ExecutionTableToolbarActions({
       >
         <FileText className="mr-2 h-4 w-4" />
         Generate Report
-      </Button>
+      </Button> */}
     </div>
   );
 }

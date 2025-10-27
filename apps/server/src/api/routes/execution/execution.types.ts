@@ -69,21 +69,22 @@ export const accountingEquationValidationSchema = z.object({
 // Query parameters
 export const executionListQuerySchema = z.object({
   // Direct ID filters
-  projectId: z.string().optional(),
-  facilityId: z.string().optional(),
-  reportingPeriodId: z.string().optional(),
-  categoryId: z.string().optional(),
+  projectId: z.string().optional().describe("Filter by specific project ID"),
+  facilityId: z.string().optional().describe("Filter by specific facility ID"),
+  reportingPeriodId: z.string().optional().describe("Filter by specific reporting period ID"),
+  categoryId: z.string().optional().describe("Filter by specific category ID"),
+  districtId: z.string().optional().describe("Filter by district ID (admin users only - ignored for non-admin users)"),
 
   // Type-based filters
-  facilityType: z.enum(['hospital', 'health_center']).optional(),
-  projectType: z.enum(['HIV', 'Malaria', 'TB']).optional(),
-  reportingPeriod: z.string().optional(), // Year (e.g., "2024")
-  year: z.string().optional(),
-  quarter: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).optional(),
+  facilityType: z.enum(['hospital', 'health_center']).optional().describe("Filter by facility type"),
+  projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Filter by project type"),
+  reportingPeriod: z.string().optional().describe("Filter by reporting period year (e.g., '2024')"),
+  year: z.string().optional().describe("Filter by year"),
+  quarter: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).optional().describe("Filter by quarter"),
 
   // Pagination
-  page: z.string().default('1'),
-  limit: z.string().default('20'),
+  page: z.string().default('1').describe("Page number for pagination"),
+  limit: z.string().default('20').describe("Number of items per page"),
 });
 
 export type InsertExecutionData = z.infer<typeof insertExecutionDataSchema>;
@@ -93,6 +94,34 @@ export type ExecutionListQuery = z.infer<typeof executionListQuerySchema>;
 export type CalculateBalances = z.infer<typeof calculateBalancesSchema>;
 export type BalancesResponse = z.infer<typeof balancesResponseSchema>;
 export type QuarterlyValues = z.infer<typeof quarterlyValuesSchema>;
+
+// District information for admin users
+export interface DistrictInfo {
+  id: number;
+  name: string;
+}
+
+// Extended execution data with district information for admin users
+export interface ExecutionDataWithDistrict extends SelectExecutionData {
+  district?: DistrictInfo | null;
+}
+
+// Schema for execution data that may include district information (for admin users)
+export const selectExecutionDataWithDistrictSchema = selectExecutionDataSchema.extend({
+  district: z.object({
+    id: z.number().int().describe("District ID"),
+    name: z.string().describe("District name"),
+  }).nullable().optional().describe("District information (only available for admin users)"),
+});
+
+// Execution list response filters
+export interface ExecutionListFilters {
+  facilityType?: string;
+  projectType?: string;
+  reportingPeriod?: string;
+  quarter?: string;
+  district?: string; // Only present for admin users when filter applied
+}
 
 // Compiled execution aggregation schemas
 export const compiledExecutionQuerySchema = z.object({

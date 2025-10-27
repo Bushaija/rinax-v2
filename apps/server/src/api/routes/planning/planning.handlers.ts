@@ -2,7 +2,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import * as HttpStatusCodes from "stoker/http-status-codes";
 
 import { db } from "@/api/db";
-import { schemaFormDataEntries, dynamicActivities, facilities, projects, reportingPeriods, schemaActivityCategories, formSchemas, users } from "@/api/db/schema";
+import { schemaFormDataEntries, dynamicActivities, facilities, projects, reportingPeriods, schemaActivityCategories, formSchemas, users, districts } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 
 // TODO: create computation.service & validation.service
@@ -28,7 +28,7 @@ import type {
   SubmitForApprovalRoute
 } from "./planning.routes";
 import { getUserContext, canAccessFacility, hasAdminAccess } from "@/api/lib/utils/get-user-facility";
-import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
+import { buildFacilityFilter, buildDistrictBasedFacilityFilter, validateDistrictExists } from "@/api/lib/utils/query-filters";
 import { fileParserService } from "@/api/lib/services/file-parser.service";
 import { approvalService } from "@/lib/services/approval.service";
 import { auditService } from "@/lib/services/audit.service";
@@ -39,6 +39,7 @@ import { ApprovalError, ApprovalErrorFactory, isApprovalError } from "@/lib/erro
 export const list: AppRouteHandler<ListRoute> = async (c) => {
   try {
     const userContext = await getUserContext(c);
+    const isAdmin = hasAdminAccess(userContext.role, userContext.permissions);
 
     const query = c.req.query();
     const {
@@ -48,6 +49,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       projectType,
       reportingPeriod,
       approvalStatus, // NEW: Add approval status filter
+      districtId, // NEW: Add district filter for admin users
       ...filters
     } = query;
 
@@ -57,13 +59,30 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     // Base condition - always filter by entityType
     let whereConditions: any[] = [eq(schemaFormDataEntries.entityType, 'planning')];
 
-    // Add district-based facility filter using buildFacilityFilter utility
+    // Add facility filtering logic - district-based for admin users, facility-based for others
     try {
-      const requestedFacilityId = filters.facilityId ? parseInt(filters.facilityId) : undefined;
-      const facilityFilter = buildFacilityFilter(userContext, requestedFacilityId);
+      if (isAdmin && districtId) {
+        // Admin with district filter: validate and filter by specific district
+        const isValidDistrict = await validateDistrictExists(parseInt(districtId));
+        if (!isValidDistrict) {
+          return c.json(
+            { message: "Invalid district ID provided" },
+            HttpStatusCodes.BAD_REQUEST
+          );
+        }
 
-      if (facilityFilter) {
-        whereConditions.push(facilityFilter);
+        const districtFilter = await buildDistrictBasedFacilityFilter(parseInt(districtId));
+        if (districtFilter) {
+          whereConditions.push(districtFilter);
+        }
+      } else {
+        // Non-admin users or admin without district filter: use existing facility-based filtering
+        const requestedFacilityId = filters.facilityId ? parseInt(filters.facilityId) : undefined;
+        const facilityFilter = buildFacilityFilter(userContext, requestedFacilityId);
+
+        if (facilityFilter) {
+          whereConditions.push(facilityFilter);
+        }
       }
     } catch (error: any) {
       if (error.message === "Access denied: facility not in your district") {
@@ -89,21 +108,46 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       whereConditions.push(eq(schemaFormDataEntries.approvalStatus, approvalStatus as any));
     }
 
-    // Build query with joins
-    const baseQuery = db
-      .select({
-        entry: schemaFormDataEntries,
-        facility: facilities,
-        project: projects,
-        reportingPeriod: reportingPeriods,
-      })
-      .from(schemaFormDataEntries)
-      .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
-      .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
-      .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
-      .where(and(...whereConditions));
+    // Build query with joins - separate queries for admin and non-admin users
+    let results: any[];
+    
+    if (isAdmin) {
+      // Admin query with district information
+      const adminQuery = db
+        .select({
+          entry: schemaFormDataEntries,
+          facility: facilities,
+          project: projects,
+          reportingPeriod: reportingPeriods,
+          district: districts,
+        })
+        .from(schemaFormDataEntries)
+        .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
+        .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
+        .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
+        .leftJoin(districts, eq(facilities.districtId, districts.id))
+        .where(and(...whereConditions));
+      
+      results = await adminQuery;
+    } else {
+      // Non-admin query without district information
+      const nonAdminQuery = db
+        .select({
+          entry: schemaFormDataEntries,
+          facility: facilities,
+          project: projects,
+          reportingPeriod: reportingPeriods,
+        })
+        .from(schemaFormDataEntries)
+        .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
+        .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
+        .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
+        .where(and(...whereConditions));
+      
+      results = await nonAdminQuery;
+    }
 
-    const results = await baseQuery;
+
 
     // Apply additional filters on the result set
     let filteredResults = results;
@@ -191,8 +235,23 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
 
       const enhanced = await Promise.all(data.map(enhance));
 
+      // Add district information for admin users
+      const enhancedWithDistrict = isAdmin 
+        ? enhanced.map(entry => {
+            // Find the corresponding result with district info
+            const resultWithDistrict = results.find(r => r.entry.id === entry.id);
+            return {
+              ...entry,
+              district: resultWithDistrict?.district ? {
+                id: resultWithDistrict.district.id,
+                name: resultWithDistrict.district.name,
+              } : null,
+            };
+          })
+        : enhanced;
+
       return c.json({
-        data: enhanced,
+        data: enhancedWithDistrict,
         pagination: {
           page,
           limit,
@@ -203,13 +262,30 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
           facilityType: facilityType || undefined,
           projectType: projectType || undefined,
           reportingPeriod: reportingPeriod || undefined,
-          approvalStatus: approvalStatus || undefined, // NEW
+          approvalStatus: approvalStatus || undefined,
+          // Include district filter in response for admin users
+          ...(isAdmin && districtId && { district: districtId }),
         },
       });
     } catch (e) {
       console.error('Enhancement failed:', e);
+      
+      // Add district information for admin users even in fallback
+      const dataWithDistrict = isAdmin 
+        ? data.map(entry => {
+            const resultWithDistrict = results.find(r => r.entry.id === entry.id);
+            return {
+              ...entry,
+              district: resultWithDistrict?.district ? {
+                id: resultWithDistrict.district.id,
+                name: resultWithDistrict.district.name,
+              } : null,
+            };
+          })
+        : data;
+
       return c.json({
-        data,
+        data: dataWithDistrict,
         pagination: {
           page,
           limit,
@@ -220,7 +296,9 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
           facilityType: facilityType || undefined,
           projectType: projectType || undefined,
           reportingPeriod: reportingPeriod || undefined,
-          approvalStatus: approvalStatus || undefined, // NEW
+          approvalStatus: approvalStatus || undefined,
+          // Include district filter in response for admin users
+          ...(isAdmin && districtId && { district: districtId }),
         },
       });
     }

@@ -484,7 +484,7 @@ export const assetsAndLiabilitiesTemplates: TemplateLine[] = [
     displayOrder: 25,
     level: 2,
     isTotalLine: true,
-    calculationFormula: '(TRANSFERS_PUBLIC_ENTITIES + OTHER_REVENUE) - (GOODS_SERVICES + OTHER_EXPENSES)',
+    calculationFormula: 'TOTAL_ASSETS - TOTAL_LIABILITIES',
     aggregationMethod: 'DIFF'
   },
   {
@@ -712,8 +712,7 @@ export const changeInNetAssetsTemplate: TemplateLine[] = [
     eventCodes: [],
     displayOrder: 17,
     level: 2,
-    // calculationFormula: '(TAX_REVENUE + GRANTS + TRANSFERS_CENTRAL_TREASURY + TRANSFERS_PUBLIC_ENTITIES + FINES_PENALTIES_LICENSES + PROPERTY_INCOME + SALES_GOODS_SERVICES + PROCEEDS_SALE_CAPITAL + OTHER_REVENUE + DOMESTIC_BORROWINGS + EXTERNAL_BORROWINGS) - (COMPENSATION_EMPLOYEES + GOODS_SERVICES + GRANTS_TRANSFERS + SUBSIDIES + SOCIAL_ASSISTANCE + FINANCE_COSTS + ACQUISITION_FIXED_ASSETS + REPAYMENT_BORROWINGS + OTHER_EXPENSES)',
-    calculationFormula: '(TRANSFERS_PUBLIC_ENTITIES + OTHER_REVENUE) - (GOODS_SERVICES + OTHER_EXPENSES)',
+    calculationFormula: '(TRANSFERS_PUBLIC_ENTITIES + OTHER_REVENUE) - (GOODS_SERVICES + GRANTS_TRANSFERS)',
     aggregationMethod: 'DIFF',
     metadata: { columnType: 'ADJUSTMENT' }
   },
@@ -816,7 +815,7 @@ export const budgetVsActualAmountsTemplate: TemplateLine[] = [
   {
     lineItem: 'Goods and services',
     lineCode: 'GOODS_SERVICES',
-    eventCodes: [], // Empty - uses custom mapping
+    eventCodes: ['GOODS_SERVICES', 'GRANTS_TRANSFERS'],
     displayOrder: 9,
     level: 2,
     metadata: {
@@ -824,7 +823,7 @@ export const budgetVsActualAmountsTemplate: TemplateLine[] = [
       statementType: 'BUDGET_VS_ACTUAL',
       budgetVsActualMapping: {
         budgetEvents: ['GOODS_SERVICES_PLANNING'],
-        actualEvents: ['GOODS_SERVICES']
+        actualEvents: ['GOODS_SERVICES', 'GRANTS_TRANSFERS']
       }
     }
   },

@@ -17,6 +17,7 @@ import type { PlanningActivity } from "../../planning/_components/planning-table
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useUser, usePermissions } from "@/components/providers/session-provider"
 
 
 interface ExecutionTableProps {
@@ -35,16 +36,24 @@ interface ExecutionTableProps {
   reportingPeriodId?: number
 }
 
-export function ExecutionTable({ 
+export function ExecutionTable({
   initialData,
-  programs = [], 
-  getFacilityTypes = () => [], 
+  programs = [],
+  getFacilityTypes = () => [],
   districtId,
   reportingPeriodId,
 }: ExecutionTableProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [rowAction, setRowAction] = useState<DataTableRowAction<ExecutionActivity> | null>(null)
+  const [, setRowAction] = useState<DataTableRowAction<ExecutionActivity> | null>(null)
+
+  // Get user context to determine admin access
+  const user = useUser()
+  const { hasPermission } = usePermissions()
+
+  // Determine if user is admin (can access district filtering)
+  // Based on the existing pattern, we'll check for admin role or specific permissions
+  const isAdmin = user?.role === 'admin' || hasPermission('district_access') || hasPermission('admin_access')
 
   // Extract filter parameters from URL (mirroring planning)
   const currentPage = Number(searchParams.get('page')) || 1
@@ -55,10 +64,11 @@ export function ExecutionTable({
   // Back-compat with existing toolbar which uses "program"
   const programParamFallback = searchParams.get('program') || ''
   const search = searchParams.get('search') || ''
+  const districtFilter = searchParams.get('districtId') || ''
 
   const columns = useMemo(
-    () => getExecutionTableColumns({ setRowAction, router }),
-    [setRowAction, router]
+    () => getExecutionTableColumns({ setRowAction, router, isAdmin }),
+    [setRowAction, router, isAdmin]
   )
 
   // Build filter object for the API call
@@ -78,8 +88,12 @@ export function ExecutionTable({
       filterObj.projectType = effectiveProjectType
     }
 
+    if (districtFilter) {
+      filterObj.districtId = districtFilter
+    }
+
     return filterObj
-  }, [facilityNameFilter, facilityTypeFilter, projectTypeFilter, programParamFallback])
+  }, [facilityNameFilter, facilityTypeFilter, projectTypeFilter, programParamFallback, districtFilter])
 
   const { data, isLoading, error } = useGetExecutions({
     page: currentPage,
@@ -100,9 +114,9 @@ export function ExecutionTable({
     initialState: {
       sorting: [{ id: "createdAt", desc: true }],
       columnPinning: { right: ["actions"] },
-      pagination: { 
+      pagination: {
         pageIndex: currentPage - 1,
-        pageSize: pageSize 
+        pageSize: pageSize
       },
     },
     getRowId: (originalRow) => String((originalRow as ExecutionActivity).id),
@@ -134,8 +148,8 @@ export function ExecutionTable({
         <AlertDescription>
           <div className="space-y-2">
             <p>{(error as any)?.message || 'Failed to load execution records. Please try again.'}</p>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => window.location.reload()}
             >
@@ -147,19 +161,46 @@ export function ExecutionTable({
     )
   }
 
+  // Show active filters for admin users
+  const activeFilters = []
+  if (isAdmin && districtFilter) {
+    activeFilters.push(`District: ${districtFilter}`)
+  }
+  if (facilityTypeFilter) {
+    activeFilters.push(`Facility Type: ${facilityTypeFilter}`)
+  }
+  if (projectTypeFilter || programParamFallback) {
+    activeFilters.push(`Project Type: ${projectTypeFilter || programParamFallback}`)
+  }
+
   return (
-    <DataTable 
-        table={table} 
-        actionBar={<ExecutionTableActionBar table={table} /> }>
-      <DataTableToolbar table={table}>
-        <ExecutionTableToolbarActions 
-          table={table} 
-          programs={programs}
-          getFacilityTypes={getFacilityTypes}
-          districtId={districtId}
-        />
-      </DataTableToolbar>
-    </DataTable>
+    <div className="space-y-4">
+      {/* Active Filters Indicator */}
+      {activeFilters.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Active filters:</span>
+          {activeFilters.map((filter, index) => (
+            <span key={index} className="bg-muted px-2 py-1 rounded-md">
+              {filter}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <DataTable
+        table={table}
+        actionBar={<ExecutionTableActionBar table={table} />}>
+        <DataTableToolbar table={table}>
+          <ExecutionTableToolbarActions
+            table={table}
+            programs={programs}
+            getFacilityTypes={getFacilityTypes}
+            districtId={districtId}
+            isAdmin={isAdmin}
+          />
+        </DataTableToolbar>
+      </DataTable>
+    </div>
   )
 }
 

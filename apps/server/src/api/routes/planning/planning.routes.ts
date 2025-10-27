@@ -4,6 +4,7 @@ import { jsonContent, jsonContentRequired } from "stoker/openapi/helpers";
 import { IdParamsSchema } from "stoker/openapi/schemas";
 import {
   selectPlanningDataSchema,
+  selectPlanningDataWithDistrictSchema,
   insertPlanningDataSchema,
   patchPlanningDataSchema,
   planningListQuerySchema,
@@ -23,27 +24,36 @@ export const list = createRoute({
   path: "/planning",
   method: "get",
   tags,
+  summary: "List planning data entries",
+  description: "Retrieves a paginated list of planning data entries. Admin users can filter by district and will receive district information in the response. Non-admin users are restricted to their assigned facilities and will not see district information.",
   request: {
     query: planningListQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(
       z.object({
-        data: z.array(selectPlanningDataSchema),
+        data: z.array(selectPlanningDataWithDistrictSchema),
         pagination: z.object({
-          page: z.string(),
-          limit: z.string(),
-          total: z.number(),
-          totalPages: z.number(),
+          page: z.string().describe("Current page number"),
+          limit: z.string().describe("Number of items per page"),
+          total: z.number().describe("Total number of items"),
+          totalPages: z.number().describe("Total number of pages"),
         }),
         filters: z.object({
-          facilityType: z.string().optional(),
-          projectType: z.string().optional(),
-          reportingPeriod: z.string().optional(),
-          approvalStatus: z.string().optional(),
-        }).optional(),
+          facilityType: z.string().optional().describe("Applied facility type filter"),
+          projectType: z.string().optional().describe("Applied project type filter"),
+          reportingPeriod: z.string().optional().describe("Applied reporting period filter"),
+          approvalStatus: z.string().optional().describe("Applied approval status filter"),
+          district: z.string().optional().describe("Applied district filter (admin users only)"),
+        }).optional().describe("Applied filters in the current request"),
       }),
-      "List of planning data entries with applied filters"
+      "List of planning data entries with applied filters. District information and filtering are only available for admin users."
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string().describe("Error message describing the validation failure"),
+      }),
+      "Invalid query parameters, such as invalid district ID for admin users"
     ),
   },
 });

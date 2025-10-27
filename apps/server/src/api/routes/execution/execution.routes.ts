@@ -4,6 +4,7 @@ import { jsonContent, jsonContentRequired } from "stoker/openapi/helpers";
 import { IdParamsSchema } from "stoker/openapi/schemas";
 import {
   selectExecutionDataSchema,
+  selectExecutionDataWithDistrictSchema,
   insertExecutionDataSchema,
   patchExecutionDataSchema,
   executionListQuerySchema,
@@ -21,27 +22,36 @@ export const list = createRoute({
   path: "/execution",
   method: "get",
   tags,
+  summary: "List execution data entries",
+  description: "Retrieves a paginated list of execution data entries. Admin users can filter by district and will receive district information in the response. Non-admin users are restricted to their assigned facilities and will not see district information.",
   request: {
     query: executionListQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: jsonContent(
       z.object({
-        data: z.array(selectExecutionDataSchema),
+        data: z.array(selectExecutionDataWithDistrictSchema),
         pagination: z.object({
-          page: z.string(),
-          limit: z.string(),
-          total: z.number(),
-          totalPages: z.number(),
+          page: z.string().describe("Current page number"),
+          limit: z.string().describe("Number of items per page"),
+          total: z.number().describe("Total number of items"),
+          totalPages: z.number().describe("Total number of pages"),
         }),
         filters: z.object({
-          facilityType: z.string().optional(),
-          projectType: z.string().optional(),
-          reportingPeriod: z.string().optional(),
-          quarter: z.string().optional(),
-        }).optional(),
+          facilityType: z.string().optional().describe("Applied facility type filter"),
+          projectType: z.string().optional().describe("Applied project type filter"),
+          reportingPeriod: z.string().optional().describe("Applied reporting period filter"),
+          quarter: z.string().optional().describe("Applied quarter filter"),
+          district: z.string().optional().describe("Applied district filter (admin users only)"),
+        }).optional().describe("Applied filters in the current request"),
       }),
-      "List of execution data entries with applied filters"
+      "List of execution data entries with applied filters. District information and filtering are only available for admin users."
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string().describe("Error message describing the validation failure"),
+      }),
+      "Invalid query parameters, such as invalid district ID for admin users"
     ),
   },
 });

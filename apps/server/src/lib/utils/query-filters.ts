@@ -1,6 +1,6 @@
 import { SQL, eq, inArray, and } from "drizzle-orm";
 import { db } from "@/db";
-import { schemaFormDataEntries } from "@/db/schema";
+import { schemaFormDataEntries, facilities, districts } from "@/db/schema";
 import { UserContext, hasAdminAccess } from "./get-user-facility";
 
 /**
@@ -74,4 +74,65 @@ export async function validateRecordFacilityAccess(
 
   // Check if the record's facility is in the user's accessible facilities
   return userContext.accessibleFacilityIds.includes(record.facilityId);
+}
+
+/**
+ * Validate if a district exists in the database
+ * 
+ * @param districtId - The district ID to validate
+ * @returns Promise<boolean> - true if district exists, false otherwise
+ */
+export async function validateDistrictExists(districtId: number): Promise<boolean> {
+  try {
+    const district = await db.query.districts.findFirst({
+      where: eq(districts.id, districtId),
+    });
+
+    return !!district;
+  } catch (error) {
+    console.error('Error validating district existence:', error);
+    return false;
+  }
+}
+
+/**
+ * Build facility filter based on district ID for admin users
+ * This function filters facilities by district and returns a SQL condition
+ * that can be used to filter execution data by facilities in the specified district
+ * 
+ * @param districtId - The district ID to filter by
+ * @returns Promise<SQL | null> - SQL condition for facility filtering, or null if district invalid
+ */
+export async function buildDistrictBasedFacilityFilter(districtId: number): Promise<SQL | null> {
+  try {
+    // First validate that the district exists
+    const districtExists = await validateDistrictExists(districtId);
+    if (!districtExists) {
+      return null;
+    }
+
+    // Get all facility IDs in the specified district
+    const facilitiesInDistrict = await db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(eq(facilities.districtId, districtId));
+
+    // If no facilities found in district, return null
+    if (facilitiesInDistrict.length === 0) {
+      return null;
+    }
+
+    // Extract facility IDs
+    const facilityIds = facilitiesInDistrict.map(f => f.id);
+
+    // Return SQL condition to filter by these facilities
+    if (facilityIds.length === 1) {
+      return eq(schemaFormDataEntries.facilityId, facilityIds[0]);
+    }
+
+    return inArray(schemaFormDataEntries.facilityId, facilityIds);
+  } catch (error) {
+    console.error('Error building district-based facility filter:', error);
+    return null;
+  }
 }

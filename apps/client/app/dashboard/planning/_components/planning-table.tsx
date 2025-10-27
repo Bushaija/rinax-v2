@@ -15,6 +15,7 @@ import useGetPlanningActivities from "@/hooks/queries/planning/use-get-planning-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useUser, usePermissions } from "@/components/providers/session-provider";
 
 interface PlanningTableProps {
   initialData?: {
@@ -42,6 +43,13 @@ export function PlanningTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [rowAction, setRowAction] = React.useState<DataTableRowAction<PlanningActivity> | null>(null);
+  
+  // Get user context to determine admin access
+  const user = useUser();
+  const { hasPermission } = usePermissions();
+  
+  // Determine if user is admin (can access district filtering)
+  const isAdmin = user?.role === 'admin' || hasPermission('district_access') || hasPermission('admin_access');
 
   // Extract filter parameters from URL
   const currentPage = Number(searchParams.get('page')) || 1;
@@ -50,6 +58,7 @@ export function PlanningTable({
   const facilityTypeFilter = searchParams.get('facilityType') || '';
   const projectTypeFilter = searchParams.get('projectType') || '';
   const search = searchParams.get('search') || '';
+  const districtFilter = searchParams.get('districtId') || '';
 
   // Refresh function to refetch data
   const handleRefresh = React.useCallback(() => {
@@ -58,8 +67,8 @@ export function PlanningTable({
   }, []);
 
   const columns = React.useMemo(
-    () => getPlanningTableColumns({ setRowAction, router, onRefresh: handleRefresh }),
-    [setRowAction, router, handleRefresh]
+    () => getPlanningTableColumns({ setRowAction, router, onRefresh: handleRefresh, isAdmin }),
+    [setRowAction, router, handleRefresh, isAdmin]
   );
 
   // Build filter object for the API call
@@ -78,8 +87,12 @@ export function PlanningTable({
       filterObj.projectType = projectTypeFilter;
     }
     
+    if (districtFilter) {
+      filterObj.districtId = districtFilter;
+    }
+    
     return filterObj;
-  }, [facilityNameFilter, facilityTypeFilter, projectTypeFilter]);
+  }, [facilityNameFilter, facilityTypeFilter, projectTypeFilter, districtFilter]);
 
   // Use the hook to get planning activities data with pagination and filters
   const { data, isLoading, error } = useGetPlanningActivities({
@@ -148,8 +161,32 @@ export function PlanningTable({
     );
   }
 
+  // Show active filters for admin users
+  const activeFilters = [];
+  if (isAdmin && districtFilter) {
+    activeFilters.push(`District: ${districtFilter}`);
+  }
+  if (facilityTypeFilter) {
+    activeFilters.push(`Facility Type: ${facilityTypeFilter}`);
+  }
+  if (projectTypeFilter) {
+    activeFilters.push(`Project Type: ${projectTypeFilter}`);
+  }
+
   return (
-    <>
+    <div className="space-y-4">
+      {/* Active Filters Indicator */}
+      {activeFilters.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Active filters:</span>
+          {activeFilters.map((filter, index) => (
+            <span key={index} className="bg-muted px-2 py-1 rounded-md">
+              {filter}
+            </span>
+          ))}
+        </div>
+      )}
+      
       <DataTable
         table={table}
         actionBar={<PlanningTableActionBar table={table} />}
@@ -161,9 +198,10 @@ export function PlanningTable({
             getFacilityTypes={getFacilityTypes}
             districtId={districtId}
             onRefresh={handleRefresh}
+            isAdmin={isAdmin}
           />
         </DataTableToolbar>
       </DataTable>
-    </>
+    </div>
   );
 }

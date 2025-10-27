@@ -1,11 +1,11 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import * as HttpStatusCodes from "stoker/http-status-codes";
 
 import { db } from "@/api/db";
 import { schemaFormDataEntries, dynamicActivities, schemaActivityCategories, formSchemas, facilities, projects, reportingPeriods, districts, provinces } from "@/api/db/schema";
 import type { AppRouteHandler } from "@/api/lib/types";
 import { getUserContext, canAccessFacility, hasAdminAccess } from "@/api/lib/utils/get-user-facility";
-import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
+import { buildFacilityFilter, buildDistrictBasedFacilityFilter, validateDistrictExists } from "@/api/lib/utils/query-filters";
 import { buildScopeFilter } from "@/lib/utils/scope-filters";
 import { validateScopeAccess } from "@/lib/utils/scope-access-control";
 import { buildScopeMetadata } from "@/lib/utils/scope-metadata";
@@ -141,6 +141,9 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     // Get user context with district information
     const userContext = await getUserContext(c);
 
+    // Detect admin users for district filtering capabilities
+    const isAdmin = hasAdminAccess(userContext.role, userContext.permissions);
+
     // Parse and validate query parameters
     const query = executionListQuerySchema.parse(c.req.query());
 
@@ -152,6 +155,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       reportingPeriod,
       quarter,
       year,
+      districtId, // Extract districtId parameter for admin users
       ...filters
     } = query;
 
@@ -161,13 +165,30 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     // Base condition - always filter by entityType
     let whereConditions: any[] = [eq(schemaFormDataEntries.entityType, 'execution')];
 
-    // Add district-based facility filter using buildFacilityFilter utility
+    // Apply district-based query filtering for admin users or facility-based for non-admin users
     try {
-      const requestedFacilityId = filters.facilityId ? parseInt(filters.facilityId) : undefined;
-      const facilityFilter = buildFacilityFilter(userContext, requestedFacilityId);
+      if (isAdmin && districtId) {
+        // Admin with district filter: validate district and filter by specific district
+        const districtExists = await validateDistrictExists(parseInt(districtId));
+        if (!districtExists) {
+          return c.json(
+            { message: "Invalid district ID provided" },
+            HttpStatusCodes.BAD_REQUEST
+          );
+        }
 
-      if (facilityFilter) {
-        whereConditions.push(facilityFilter);
+        const districtFilter = await buildDistrictBasedFacilityFilter(parseInt(districtId));
+        if (districtFilter) {
+          whereConditions.push(districtFilter);
+        }
+      } else {
+        // Non-admin users or admin without district filter: use existing facility-based filtering
+        const requestedFacilityId = filters.facilityId ? parseInt(filters.facilityId) : undefined;
+        const facilityFilter = buildFacilityFilter(userContext, requestedFacilityId);
+
+        if (facilityFilter) {
+          whereConditions.push(facilityFilter);
+        }
       }
     } catch (error: any) {
       // buildFacilityFilter throws error if user requests facility outside their district
@@ -189,19 +210,34 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       whereConditions.push(eq(schemaFormDataEntries.reportingPeriodId, parseInt(filters.reportingPeriodId)));
     }
 
-    // Build query with joins for filtering by type/period
-    const baseQuery = db
-      .select({
-        entry: schemaFormDataEntries,
-        facility: facilities,
-        project: projects,
-        reportingPeriod: reportingPeriods,
-      })
-      .from(schemaFormDataEntries)
-      .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
-      .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
-      .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
-      .where(and(...whereConditions));
+    // Build query with joins for filtering by type/period, including district joins for admin users
+    const baseQuery = isAdmin
+      ? db
+          .select({
+            entry: schemaFormDataEntries,
+            facility: facilities,
+            project: projects,
+            reportingPeriod: reportingPeriods,
+            district: districts,
+          })
+          .from(schemaFormDataEntries)
+          .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
+          .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
+          .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
+          .leftJoin(districts, eq(facilities.districtId, districts.id))
+          .where(and(...whereConditions))
+      : db
+          .select({
+            entry: schemaFormDataEntries,
+            facility: facilities,
+            project: projects,
+            reportingPeriod: reportingPeriods,
+          })
+          .from(schemaFormDataEntries)
+          .leftJoin(facilities, eq(schemaFormDataEntries.facilityId, facilities.id))
+          .leftJoin(projects, eq(schemaFormDataEntries.projectId, projects.id))
+          .leftJoin(reportingPeriods, eq(schemaFormDataEntries.reportingPeriodId, reportingPeriods.id))
+          .where(and(...whereConditions));
 
     // Execute query
     const results = await baseQuery;
@@ -255,7 +291,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     // Fetch full details for paginated results
     const entryIds = paginatedResults.map(r => r.entry.id);
 
-    const data = entryIds.length > 0
+    let data = entryIds.length > 0
       ? await db.query.schemaFormDataEntries.findMany({
         where: (entries, { inArray }) => inArray(entries.id, entryIds),
         with: {
@@ -270,6 +306,36 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
         orderBy: (entries, { desc }) => [desc(entries.updatedAt)],
       })
       : [];
+
+    // Transform response data for admin users to include district information
+    if (isAdmin && data.length > 0) {
+      // Get district information for each facility since the detailed query doesn't include district joins
+      const facilityIds = data.map(entry => entry.facilityId);
+      const facilitiesWithDistricts = await db
+        .select({
+          facilityId: facilities.id,
+          districtId: districts.id,
+          districtName: districts.name,
+        })
+        .from(facilities)
+        .leftJoin(districts, eq(facilities.districtId, districts.id))
+        .where(inArray(facilities.id, facilityIds));
+
+      // Create a map for quick lookup
+      const facilityDistrictMap = new Map();
+      facilitiesWithDistricts.forEach(f => {
+        facilityDistrictMap.set(f.facilityId, {
+          id: f.districtId,
+          name: f.districtName,
+        });
+      });
+
+      // Add district information to each execution entry for admin users
+      data = data.map(entry => ({
+        ...entry,
+        district: facilityDistrictMap.get(entry.facilityId) || null,
+      }));
+    }
 
     const totalPages = Math.ceil(total / limit_);
 
@@ -286,6 +352,8 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
         projectType: projectType || undefined,
         reportingPeriod: reportingPeriod || year || undefined,
         quarter: quarter || undefined,
+        // Include district filter in response for admin users when applied
+        ...(isAdmin && districtId && { district: districtId }),
       },
     });
   } catch (error: any) {

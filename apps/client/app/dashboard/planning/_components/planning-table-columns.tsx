@@ -80,6 +80,10 @@ export interface PlanningActivity {
     facilityType: string;
     districtId: number;
   };
+  district?: {
+    id: number;
+    name: string;
+  } | null;
   reportingPeriod: {
     id: number;
     year: number;
@@ -103,10 +107,12 @@ export function getPlanningTableColumns({
   setRowAction,
   router,
   onRefresh,
+  isAdmin = false,
 }: {
   setRowAction: (action: DataTableRowAction<PlanningActivity>) => void;
   router: any;
   onRefresh?: () => void;
+  isAdmin?: boolean;
 }): ColumnDef<PlanningActivity>[] {
   return [
     {
@@ -183,6 +189,22 @@ export function getPlanningTableColumns({
         ],
       },
     },
+    // District column - only show for admin users
+    ...(isAdmin ? [{
+      id: "district",
+      accessorKey: "district.name",
+      header: "District",
+      cell: ({ row }: { row: any }) => {
+        const district = row.original.district;
+        return (
+          <div className="font-medium">
+            {district?.name || "N/A"}
+          </div>
+        );
+      },
+      enableSorting: true,
+      enableColumnFilter: false,
+    }] : []),
     {
       accessorKey: "reportingPeriod.year",
       header: "Reporting Period",

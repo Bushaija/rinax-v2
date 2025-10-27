@@ -15,6 +15,7 @@ function useGetExecutions(query: GetExecutionsRequest) {
       (query as any)?.facilityName ?? null,
       (query as any)?.facilityType ?? null,
       (query as any)?.projectType ?? null,
+      (query as any)?.districtId ?? null,
       query?.page ?? 1,
       query?.limit ?? 20,
     ],

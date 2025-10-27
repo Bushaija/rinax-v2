@@ -60,6 +60,10 @@ export interface ExecutionActivity {
     facilityType: string;
     districtId: number;
   };
+  district?: {
+    id: number;
+    name: string;
+  } | null;
   reportingPeriod: {
     id: number;
     year: number;
@@ -82,9 +86,11 @@ export interface ExecutionActivity {
 export function getExecutionTableColumns({
   setRowAction,
   router,
+  isAdmin = false,
 }: {
   setRowAction: (action: DataTableRowAction<ExecutionActivity>) => void;
   router: any;
+  isAdmin?: boolean;
 }): ColumnDef<ExecutionActivity>[] {
   return [
     {
@@ -161,6 +167,22 @@ export function getExecutionTableColumns({
         ],
       },
     },
+    // District column - only show for admin users
+    ...(isAdmin ? [{
+      id: "district",
+      accessorKey: "district.name",
+      header: "District",
+      cell: ({ row }: { row: any }) => {
+        const district = row.original.district;
+        return (
+          <div className="font-medium">
+            {district?.name || "N/A"}
+          </div>
+        );
+      },
+      enableSorting: true,
+      enableColumnFilter: false,
+    }] : []),
     {
       accessorKey: "reportingPeriod.year",
       header: "Reporting Period",

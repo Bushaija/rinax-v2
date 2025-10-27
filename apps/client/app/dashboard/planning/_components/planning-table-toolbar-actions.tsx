@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Download, FileText, Send, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Download, FileText, Send, Loader2, Filter } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { Table } from "@tanstack/react-table";
 import type { PlanningActivity } from "./planning-table-columns";
@@ -12,6 +12,15 @@ import { useGetCurrentReportingPeriod } from "@/hooks/queries";
 import { useUser } from "@/components/providers/session-provider";
 import { useApprovalErrorHandler } from "@/hooks/use-approval-error-handler";
 import { submitForApproval } from "@/api-client/planning-approval";
+import { useGetDistricts } from "@/hooks/queries/districts/use-get-districts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface PlanningTableToolbarActionsProps {
   table: Table<PlanningActivity>;
@@ -19,6 +28,7 @@ interface PlanningTableToolbarActionsProps {
   getFacilityTypes: (program?: string) => any[];
   districtId: number | undefined;
   onRefresh?: () => void;
+  isAdmin?: boolean;
 }
 
 export function PlanningTableToolbarActions({ 
@@ -27,13 +37,21 @@ export function PlanningTableToolbarActions({
   getFacilityTypes,
   districtId,
   onRefresh,
+  isAdmin = false,
 }: PlanningTableToolbarActionsProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useUser();
   const { handleError, handleSuccess } = useApprovalErrorHandler();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: currentReportingPeriod } = useGetCurrentReportingPeriod();
+  
+  // Get current district filter from URL
+  const currentDistrictFilter = searchParams.get('districtId') || '';
+  
+  // Fetch districts for admin users
+  const { data: districts } = useGetDistricts({});
   
   // Get selected rows and filter for DRAFT status
   const selectedRows = table.getFilteredSelectedRowModel().rows;
@@ -102,8 +120,48 @@ export function PlanningTableToolbarActions({
     }
   };
 
+  const handleDistrictFilterChange = (districtId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (districtId && districtId !== 'all') {
+      params.set('districtId', districtId);
+    } else {
+      params.delete('districtId');
+    }
+    
+    // Reset to first page when filter changes
+    params.set('page', '1');
+    
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <div className="flex items-center gap-2">
+      {/* District Filter - Only show for admin users */}
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <Label htmlFor="district-filter" className="text-sm font-medium">
+            District:
+          </Label>
+          <Select
+            value={currentDistrictFilter || 'all'}
+            onValueChange={handleDistrictFilterChange}
+          >
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="All Districts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Districts</SelectItem>
+              {districts?.map((district) => (
+                <SelectItem key={district.id} value={district.id.toString()}>
+                  {district.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      
       <FacilityFilterDialog
         label="New Plan"
         mode="planning"
