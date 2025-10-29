@@ -1,6 +1,6 @@
 import type { Database } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, sql, and, isNull } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 interface EventMappingData {
   projectType: "HIV" | "Malaria" | "TB";
@@ -49,41 +49,50 @@ const executionEventMappings: EventMappingData[] = [
   { projectType: 'TB', activityName: 'Receivables (VAT refund)', eventCode: 'ADVANCE_PAYMENTS', mappingType: 'DIRECT' },
   { projectType: 'TB', activityName: 'Other Receivables', eventCode: 'ADVANCE_PAYMENTS', mappingType: 'DIRECT' },
 
-  { projectType: 'HIV', activityName: 'payable 1: salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 2: supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 3: meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 4: sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 5: home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 6: travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 7: infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 8: supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 9: transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 10: bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'HIV', activityName: 'payable 11: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  // HIV Payables - All 13 liability activities
+  { projectType: 'HIV', activityName: 'Payable 1: Salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 2: Supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 3: Meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 4: Sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 5: Home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 6: Travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 7: Communication - airtime', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 8: Communication - internet', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 9: Infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 10: Supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 11: Transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 12: Bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'HIV', activityName: 'Payable 13: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
 
-  { projectType: 'Malaria', activityName: 'payable 1: salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 2: supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 3: meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 4: sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 5: home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 6: travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 7: infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 8: supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 9: transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 10: bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'Malaria', activityName: 'payable 11: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  // Malaria Payables - All 13 liability activities
+  { projectType: 'Malaria', activityName: 'Payable 1: Salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 2: Supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 3: Meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 4: Sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 5: Home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 6: Travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 7: Communication - airtime', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 8: Communication - internet', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 9: Infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 10: Supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 11: Transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 12: Bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'Malaria', activityName: 'Payable 13: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
 
-  { projectType: 'TB', activityName: 'payable 1: salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 2: supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 3: meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 4: sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 5: home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 6: travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 7: infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 8: supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 9: transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 10: bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
-  { projectType: 'TB', activityName: 'payable 11: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  // TB Payables - All 13 liability activities
+  { projectType: 'TB', activityName: 'Payable 1: Salaries', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 2: Supervision', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 3: Meetings', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 4: Sample transport', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 5: Home visits', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 6: Travel survellance', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 7: Communication - airtime', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 8: Communication - internet', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 9: Infrastructure support', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 10: Supplies', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 11: Transport reporting', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 12: Bank charges', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
+  { projectType: 'TB', activityName: 'Payable 13: VAT refund', eventCode: 'PAYABLES', mappingType: 'DIRECT' },
 
   // Equity mappings
   { projectType: 'HIV', activityName: 'Accumulated Surplus/Deficit', eventCode: 'ACCUMULATED_SURPLUS_DEFICITS', mappingType: 'DIRECT' },
@@ -95,6 +104,157 @@ const executionEventMappings: EventMappingData[] = [
   { projectType: 'TB', activityName: 'Accumulated Surplus/Deficit', eventCode: 'ACCUMULATED_SURPLUS_DEFICITS', mappingType: 'DIRECT' },
   { projectType: 'TB', activityName: 'Prior Year Adjustment', eventCode: 'PRIOR_YEAR_ADJUSTMENTS', mappingType: 'DIRECT' },
 ];
+
+/**
+ * Validates execution event mappings to ensure correctness
+ * Requirements: 4.1, 4.5
+ */
+async function validateExecutionEventMappings(
+  db: Database,
+  projectType?: "HIV" | "Malaria" | "TB"
+): Promise<{
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  statistics: {
+    totalMappings: number;
+    byEvent: Record<string, number>;
+    totalRowsMapped: number;
+    payablesToGoodsServices: number;
+  };
+}> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const statistics = {
+    totalMappings: 0,
+    byEvent: {} as Record<string, number>,
+    totalRowsMapped: 0,
+    payablesToGoodsServices: 0
+  };
+
+  try {
+    // Subtask 7.1: Check for total rows mapped (Requirements: 1.4, 4.2)
+    const totalRowsQuery = await db.execute(sql`
+      SELECT COUNT(*)::int as count
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      WHERE da.is_total_row = true
+        AND da.module_type = 'execution'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+    `);
+    
+    const totalRowsCount = (totalRowsQuery as any[])[0]?.count || 0;
+    statistics.totalRowsMapped = totalRowsCount;
+    
+    if (totalRowsCount > 0) {
+      errors.push(
+        `CRITICAL: ${totalRowsCount} total rows have event mappings. ` +
+        `Total rows should never be mapped.`
+      );
+    }
+
+    // Subtask 7.2: Check for payables not mapped to PAYABLES event (Requirements: 3.5, 4.3)
+    const misroutedPayablesQuery = await db.execute(sql`
+      SELECT da.id, da.name, e.code as event_code
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      JOIN events e ON cem.event_id = e.id
+      WHERE da.name LIKE 'Payable%'
+        AND da.module_type = 'execution'
+        AND e.code != 'PAYABLES'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+    `);
+    
+    const misroutedPayables = misroutedPayablesQuery as any[];
+    
+    if (misroutedPayables.length > 0) {
+      misroutedPayables.forEach(payable => {
+        errors.push(
+          `CRITICAL: Payable activity "${payable.name}" (ID: ${payable.id}) ` +
+          `is mapped to ${payable.event_code} instead of PAYABLES`
+        );
+      });
+    }
+
+    // Subtask 7.3: Check for non-B-category activities mapped to GOODS_SERVICES (Requirements: 4.4, 6.5)
+    // B-category codes follow pattern: HIV_EXEC_B, HIV_EXEC_B-01, MAL_EXEC_B-02, etc.
+    const incorrectGoodsServicesQuery = await db.execute(sql`
+      SELECT da.id, da.name, sac.code as category_code
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      JOIN events e ON cem.event_id = e.id
+      JOIN schema_activity_categories sac ON da.category_id = sac.id
+      WHERE e.code = 'GOODS_SERVICES'
+        AND da.module_type = 'execution'
+        AND sac.code NOT LIKE '%_B-%'
+        AND sac.code NOT LIKE '%_B'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+    `);
+    
+    const incorrectGoodsServices = incorrectGoodsServicesQuery as any[];
+    
+    if (incorrectGoodsServices.length > 0) {
+      incorrectGoodsServices.forEach(activity => {
+        errors.push(
+          `ERROR: Non-expense activity "${activity.name}" (ID: ${activity.id}, Category: ${activity.category_code}) ` +
+          `is incorrectly mapped to GOODS_SERVICES`
+        );
+      });
+    }
+
+    // Subtask 7.4: Generate mapping statistics (Requirements: 4.1)
+    // Count total mappings
+    const totalMappingsQuery = await db.execute(sql`
+      SELECT COUNT(*)::int as count
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      WHERE da.module_type = 'execution'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+    `);
+    
+    statistics.totalMappings = (totalMappingsQuery as any[])[0]?.count || 0;
+
+    // Count mappings by event code
+    const mappingsByEventQuery = await db.execute(sql`
+      SELECT e.code as event_code, COUNT(cem.id)::int as count
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      JOIN events e ON cem.event_id = e.id
+      WHERE da.module_type = 'execution'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+      GROUP BY e.code
+      ORDER BY e.code
+    `);
+    
+    (mappingsByEventQuery as any[]).forEach(row => {
+      statistics.byEvent[row.event_code] = row.count;
+    });
+
+    // Count payables to GOODS_SERVICES (should be 0)
+    const payablesToGoodsServicesQuery = await db.execute(sql`
+      SELECT COUNT(*)::int as count
+      FROM configurable_event_mappings cem
+      JOIN dynamic_activities da ON cem.activity_id = da.id
+      JOIN events e ON cem.event_id = e.id
+      WHERE da.name LIKE 'Payable%'
+        AND da.module_type = 'execution'
+        AND e.code = 'GOODS_SERVICES'
+        ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
+    `);
+    
+    statistics.payablesToGoodsServices = (payablesToGoodsServicesQuery as any[])[0]?.count || 0;
+
+  } catch (error) {
+    errors.push(`Validation error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    statistics
+  };
+}
 
 /**
  * FIXED: Proper execution event mapping that respects activity names
@@ -126,16 +286,10 @@ export async function seedExecutionEventMappings(
 
     console.log(`✓ Found ${events.length} events in database`);
 
-    // Step 2: Get all execution activities
-    const activities = await db
-      .select({
-        id: schema.dynamicActivities.id,
-        name: schema.dynamicActivities.name,
-        projectType: schema.dynamicActivities.projectType,
-        facilityType: schema.dynamicActivities.facilityType,
-        categoryId: schema.dynamicActivities.categoryId,
-        activityType: schema.dynamicActivities.activityType
-      })
+    // Step 2: Get all execution activities (excluding total rows)
+    // First, get total count including total rows for logging
+    const allActivitiesQuery = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
       .from(schema.dynamicActivities)
       .where(
         and(
@@ -143,20 +297,71 @@ export async function seedExecutionEventMappings(
           projectType ? eq(schema.dynamicActivities.projectType, projectType) : sql`1=1`
         )
       );
+    
+    const totalActivitiesCount = (allActivitiesQuery[0]?.count as number) || 0;
 
-    console.log(`✓ Found ${activities.length} execution activities`);
+    const activities = await db
+      .select({
+        id: schema.dynamicActivities.id,
+        name: schema.dynamicActivities.name,
+        projectType: schema.dynamicActivities.projectType,
+        facilityType: schema.dynamicActivities.facilityType,
+        categoryId: schema.dynamicActivities.categoryId,
+        activityType: schema.dynamicActivities.activityType,
+        isTotalRow: schema.dynamicActivities.isTotalRow
+      })
+      .from(schema.dynamicActivities)
+      .where(
+        and(
+          eq(schema.dynamicActivities.moduleType, 'execution'),
+          eq(schema.dynamicActivities.isTotalRow, false),
+          projectType ? eq(schema.dynamicActivities.projectType, projectType) : sql`1=1`
+        )
+      );
 
-    // Step 3: Build activity lookup by (projectType, name)
+    const totalRowsExcluded = totalActivitiesCount - activities.length;
+    
+    console.log(`✓ Total activities loaded: ${activities.length}`);
+    console.log(`✓ Total rows excluded: ${totalRowsExcluded}`);
+
+    // Step 3: Load category information for fallback filtering
+    interface CategoryInfo {
+      id: number;
+      code: string;
+      subCategoryCode: string | null;
+    }
+
+    const categories = await db
+      .select({
+        id: schema.schemaActivityCategories.id,
+        code: schema.schemaActivityCategories.code,
+        subCategoryCode: schema.schemaActivityCategories.subCategoryCode
+      })
+      .from(schema.schemaActivityCategories)
+      .where(eq(schema.schemaActivityCategories.moduleType, 'execution'));
+
+    const categoryMap = new Map<number, CategoryInfo>();
+    categories.forEach(category => {
+      categoryMap.set(category.id, {
+        id: category.id,
+        code: category.code,
+        subCategoryCode: category.subCategoryCode
+      });
+    });
+
+    console.log(`✓ Loaded ${categories.length} category definitions`);
+
+    // Step 4: Build activity lookup by (projectType, name) - case-insensitive
     const activityByProjectAndName = new Map<string, typeof activities>();
     activities.forEach(activity => {
-      const key = `${activity.projectType}|${activity.name}`;
+      const key = `${activity.projectType}|${activity.name.toLowerCase()}`;
       if (!activityByProjectAndName.has(key)) {
         activityByProjectAndName.set(key, []);
       }
       activityByProjectAndName.get(key)!.push(activity);
     });
 
-    // Step 4: Process mappings with cross-facility expansion
+    // Step 5: Process mappings with cross-facility expansion
     const mappingRows: Array<{
       eventId: number;
       activityId: number;
@@ -185,7 +390,8 @@ export async function seedExecutionEventMappings(
         continue;
       }
 
-      const key = `${mapping.projectType}|${mapping.activityName}`;
+      // Use case-insensitive matching for activity names
+      const key = `${mapping.projectType}|${mapping.activityName?.toLowerCase()}`;
       const matchingActivities = activityByProjectAndName.get(key) || [];
 
       if (matchingActivities.length === 0) {
@@ -218,19 +424,38 @@ export async function seedExecutionEventMappings(
       }
     }
 
-    console.log(`✓ Prepared ${mappingRows.length} mappings`);
+    const explicitMappingCount = mappingRows.length;
+    console.log(`✓ Explicit mappings created: ${explicitMappingCount}`);
 
-    // Step 5: Map remaining unmapped activities to GOODS_SERVICES
+    // Step 6: Map remaining unmapped activities to GOODS_SERVICES
     const mappedActivityIds = new Set(mappingRows.map(r => r.activityId));
-    const unmappedActivities = activities.filter(a =>
-      !mappedActivityIds.has(a.id) &&
-      a.activityType !== 'COMPUTED' && // Skip computed rows
-      !a.name.includes('Total') // Skip total rows
-    );
+    const unmappedActivities = activities.filter(a => {
+      // Already mapped?
+      if (mappedActivityIds.has(a.id)) return false;
+      
+      // Is it a total row?
+      if (a.isTotalRow) return false;
+      
+      // Is it a computed/total activity type?
+      if (a.activityType === 'COMPUTED') return false;
+      if (a.activityType?.includes('TOTAL')) return false;
+      
+      // Only map B subcategory expenses to GOODS_SERVICES
+      // B-category codes follow pattern: HIV_EXEC_B, HIV_EXEC_B-01, MAL_EXEC_B-02, etc.
+      const category = categoryMap.get(a.categoryId);
+      if (!category) return false;
+      
+      // Match codes that contain '_B' or '_B-' (e.g., HIV_EXEC_B, HIV_EXEC_B-01)
+      const isBCategory = category.code.includes('_B-') || category.code.endsWith('_B');
+      if (!isBCategory) return false;
+      
+      return true;
+    });
 
     const goodsServicesEventId = eventMap.get('GOODS_SERVICES')!;
+    const fallbackMappingCount = unmappedActivities.length;
 
-    console.log(`✓ Mapping ${unmappedActivities.length} remaining activities to GOODS_SERVICES`);
+    console.log(`✓ Fallback mappings created: ${fallbackMappingCount}`);
 
     for (const activity of unmappedActivities) {
       mappingRows.push({
@@ -254,7 +479,7 @@ export async function seedExecutionEventMappings(
       });
     }
 
-    // Step 6: Insert with conflict handling
+    // Step 7: Insert with conflict handling
     console.log(`Inserting ${mappingRows.length} total mappings...`);
 
     const result = await db
@@ -280,35 +505,44 @@ export async function seedExecutionEventMappings(
 
     console.log(`✓ Successfully inserted/updated ${result.length} mappings`);
 
-    // Step 7: Verification
-    const verification = await db.execute(sql`
-      SELECT 
-        e.code as event_code,
-        COUNT(cem.id)::int as mapping_count
-      FROM events e
-      LEFT JOIN configurable_event_mappings cem ON e.id = cem.event_id
-        AND cem.is_active = true
-        AND EXISTS (
-          SELECT 1 FROM dynamic_activities da 
-          WHERE da.id = cem.activity_id 
-          AND da.module_type = 'execution'
-          ${projectType ? sql`AND da.project_type = ${projectType}` : sql``}
-        )
-      WHERE e.code IN ('OTHER_REVENUE', 'TRANSFERS_PUBLIC_ENTITIES', 'GRANTS_TRANSFERS', 'GOODS_SERVICES')
-      GROUP BY e.code
-      ORDER BY e.code
-    `);
+    // Step 8: Run comprehensive validation (Requirements: 4.1, 4.2, 4.3, 4.4, 4.5)
+    console.log('\n🔍 Running validation checks...');
+    const validationResult = await validateExecutionEventMappings(db, projectType);
 
-    console.log('\n📊 Verification Results:');
-    (verification as any[]).forEach(row => {
-      const status = row.mapping_count > 0 ? '✓' : '✗';
-      console.log(`  ${status} ${row.event_code}: ${row.mapping_count} mappings`);
+    // Enhanced logging output (Requirements: 4.1, 4.5)
+    console.log('\n📊 MAPPING STATISTICS:');
+    console.log(`  Total activities loaded: ${activities.length}`);
+    console.log(`  Total rows excluded: ${totalRowsExcluded}`);
+    console.log(`  Explicit mappings created: ${explicitMappingCount}`);
+    console.log(`  Fallback mappings created: ${fallbackMappingCount}`);
+    console.log(`  Total mappings in database: ${validationResult.statistics.totalMappings}`);
+    console.log(`  Total rows mapped (should be 0): ${validationResult.statistics.totalRowsMapped}`);
+    console.log(`  Payables to GOODS_SERVICES (should be 0): ${validationResult.statistics.payablesToGoodsServices}`);
+    
+    console.log('\n📋 MAPPINGS BY EVENT CODE:');
+    const sortedEvents = Object.entries(validationResult.statistics.byEvent).sort((a, b) => a[0].localeCompare(b[0]));
+    sortedEvents.forEach(([eventCode, count]) => {
+      console.log(`  ${eventCode}: ${count}`);
     });
+
+    // Log validation errors if any
+    if (validationResult.errors.length > 0) {
+      console.error('\n❌ VALIDATION ERRORS:');
+      validationResult.errors.forEach(err => console.error(`  - ${err}`));
+    } else {
+      console.log('\n✅ All validation checks passed!');
+    }
+
+    // Log validation warnings if any
+    if (validationResult.warnings.length > 0) {
+      console.warn('\n⚠️  VALIDATION WARNINGS:');
+      validationResult.warnings.forEach(warn => console.warn(`  - ${warn}`));
+    }
 
     return {
       success: true,
       totalMappings: result.length,
-      verification: verification as any[]
+      validation: validationResult
     };
 
   } catch (error) {
