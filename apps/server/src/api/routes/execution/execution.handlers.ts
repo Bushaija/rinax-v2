@@ -29,7 +29,7 @@ import type {
   CheckExistingRoute,
   CompiledRoute,
 } from "./execution.routes";
-import { BalancesResponse, executionListQuerySchema, compiledExecutionQuerySchema, type CompiledExecutionResponse, type FacilityColumn, type ActivityRow, type SectionSummary, type FacilityTotals, type AppliedFilters } from "./execution.types";
+import { BalancesResponse, executionListQuerySchema, compiledExecutionQuerySchema, type CompiledExecutionResponse, type FacilityColumn, type ActivityRow, type SectionSummary, type FacilityTotals, type AppliedFilters, type ActivityCatalogMap, type FacilityCatalogMapping } from "./execution.types";
 import { toBalances, parseCode, calculateCumulativeBalance } from "./execution.helpers";
 import { recalculateExecutionData, validateRecalculation } from "./execution.recalculations";
 import { ApprovalError, ApprovalErrorFactory, isApprovalError } from "@/lib/errors/approval.errors";
@@ -2236,6 +2236,247 @@ export const checkExisting: AppRouteHandler<CheckExistingRoute> = async (c) => {
   }
 };
 
+/**
+ * Load activity catalogs for all unique facility types in the execution data
+ * Supports multi-catalog loading for mixed facility type scenarios
+ * 
+ * Task 6: Performance optimizations:
+ * - Uses Promise.all() for parallel catalog loading (O(1) time instead of O(n))
+ * - Implements catalog reuse: each facility type's catalog is loaded only once
+ * - Efficient facility-to-catalog mapping using Object/Map structures
+ * 
+ * @param executionData - Array of execution entries with facility type information
+ * @param projectType - Project type (HIV, Malaria, TB) for filtering activities
+ * @param facilityTypeFilter - Optional filter to load only specific facility type catalog
+ * @returns Object containing catalogs by type, facility-to-catalog mapping, and subcategory names
+ */
+async function loadMultipleActivityCatalogs(
+  executionData: Array<{
+    id: number;
+    formData: any;
+    computedValues: any;
+    facilityId: number;
+    facilityName: string;
+    facilityType: string;
+    projectType: string;
+    year?: number;
+    quarter?: string;
+  }>,
+  projectType: string,
+  facilityTypeFilter?: string
+): Promise<{
+  catalogsByType: import('./execution.types').ActivityCatalogMap;
+  facilityCatalogMap: import('./execution.types').FacilityCatalogMapping;
+  subcategoryNames: Record<string, string>;
+}> {
+  const startTime = Date.now();
+  
+  // Task 6: Extract unique facility types from execution data (catalog reuse optimization)
+  // Each unique facility type will have its catalog loaded only once
+  const facilityTypes = new Set<string>();
+  
+  if (facilityTypeFilter) {
+    // If filter provided, only load that type
+    facilityTypes.add(facilityTypeFilter);
+  } else {
+    // Otherwise, load catalogs for all types present
+    for (const entry of executionData) {
+      if (entry.facilityType) {
+        facilityTypes.add(entry.facilityType);
+      }
+    }
+  }
+  
+  // Task 5: Log audit information when multiple facility types are detected
+  if (facilityTypes.size > 1) {
+    console.log(`[MULTI-CATALOG] [AUDIT] Multiple facility types detected: ${Array.from(facilityTypes).join(', ')}`);
+    console.log(`[MULTI-CATALOG] [AUDIT] Project type: ${projectType}, Total facilities: ${executionData.length}`);
+  } else {
+    console.log(`[MULTI-CATALOG] Loading catalog for single facility type: ${Array.from(facilityTypes)[0]}`);
+  }
+  
+  console.log(`[MULTI-CATALOG] Loading catalogs for facility types:`, Array.from(facilityTypes));
+  console.log(`[MULTI-CATALOG] [PERFORMANCE] Loading ${facilityTypes.size} unique catalogs for ${executionData.length} facilities (catalog reuse optimization)`);
+  
+  // Task 6: Add performance warning when facility count exceeds 100
+  if (executionData.length > 100) {
+    console.warn(
+      `[MULTI-CATALOG] [PERFORMANCE] Processing ${executionData.length} facilities. ` +
+      `Large dataset may impact response time. Consider using filters to reduce scope.`
+    );
+  }
+  
+  // Task 6: Load activity catalogs in parallel using Promise.all() for optimal performance
+  const catalogPromises = Array.from(facilityTypes).map(async (facilityType) => {
+    try {
+      const activities = await db
+        .select({
+          code: dynamicActivities.code,
+          name: dynamicActivities.name,
+          displayOrder: dynamicActivities.displayOrder,
+          isTotalRow: dynamicActivities.isTotalRow,
+          fieldMappings: dynamicActivities.fieldMappings,
+        })
+        .from(dynamicActivities)
+        .leftJoin(schemaActivityCategories, eq(dynamicActivities.categoryId, schemaActivityCategories.id))
+        .where(
+          and(
+            eq(dynamicActivities.projectType, projectType as any),
+            eq(dynamicActivities.facilityType, facilityType as any),
+            eq(dynamicActivities.moduleType, 'execution'),
+            eq(dynamicActivities.isActive, true),
+            eq(schemaActivityCategories.isActive, true)
+          )
+        );
+      
+      // Task 5: Log the number of activities loaded for each facility type
+      console.log(`[MULTI-CATALOG] Loaded ${activities.length} activities for facility type: ${facilityType}, project type: ${projectType}`);
+      
+      // Task 5: Warn if no activities found for a facility type
+      if (activities.length === 0) {
+        console.warn(
+          `[MULTI-CATALOG] [WARNING] No activities found for facility type: ${facilityType}, ` +
+          `project type: ${projectType}. This may cause data aggregation issues.`
+        );
+      }
+      
+      return { facilityType, activities };
+    } catch (error) {
+      // Task 5: Enhanced error logging with facility type and project type details
+      console.error(
+        `[MULTI-CATALOG] [ERROR] Failed to load catalog for facility type: ${facilityType}, ` +
+        `project type: ${projectType}`,
+        error
+      );
+      console.error(`[MULTI-CATALOG] [ERROR] Error details:`, {
+        facilityType,
+        projectType,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      throw new Error(`Failed to load activity catalog for facility type: ${facilityType}, project type: ${projectType}`);
+    }
+  });
+  
+  let catalogResults;
+  try {
+    // Task 6: Execute all catalog loading queries in parallel for optimal performance
+    catalogResults = await Promise.all(catalogPromises);
+  } catch (error) {
+    // Task 5: Enhanced error logging for catalog loading failures
+    console.error('[MULTI-CATALOG] [ERROR] Failed to load one or more activity catalogs:', error);
+    console.error('[MULTI-CATALOG] [ERROR] Context:', {
+      projectType,
+      facilityTypes: Array.from(facilityTypes),
+      facilityCount: executionData.length,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error'
+    });
+    throw error;
+  }
+  
+  // Task 6: Build catalogsByType map using efficient Object structure for O(1) lookups
+  const catalogsByType: import('./execution.types').ActivityCatalogMap = {};
+  for (const result of catalogResults) {
+    catalogsByType[result.facilityType] = result.activities.map(activity => {
+      const fieldMappings = activity.fieldMappings as any;
+      const category = fieldMappings?.category || 'A';
+      const subcategory = fieldMappings?.subcategory;
+      
+      return {
+        code: activity.code as string,
+        name: activity.name as string,
+        category,
+        subcategory,
+        displayOrder: activity.displayOrder as number,
+        isSection: false,
+        isSubcategory: false,
+        isComputed: false,
+        level: subcategory ? 2 : 1
+      };
+    });
+  }
+  
+  // Task 6: Build facility-to-catalog mapping in single pass (O(n) complexity)
+  // This implements catalog reuse: facilities of the same type share the same catalog reference
+  const facilityCatalogMap: import('./execution.types').FacilityCatalogMapping = {};
+  let facilitiesWithoutCatalog = 0;
+  
+  for (const entry of executionData) {
+    const facilityId = entry.facilityId.toString();
+    const catalog = catalogsByType[entry.facilityType];
+    if (catalog) {
+      // Task 6: Reuse catalog reference for all facilities of the same type
+      facilityCatalogMap[facilityId] = catalog;
+    } else {
+      // Task 5: Enhanced warning when facility has no catalog
+      console.warn(
+        `[MULTI-CATALOG] [WARNING] No catalog found for facility ${facilityId} (${entry.facilityName}) ` +
+        `with facility type: ${entry.facilityType}, project type: ${projectType}`
+      );
+      facilitiesWithoutCatalog++;
+    }
+  }
+  
+  // Task 5: Log summary of facilities without catalogs
+  if (facilitiesWithoutCatalog > 0) {
+    console.warn(
+      `[MULTI-CATALOG] [WARNING] ${facilitiesWithoutCatalog} out of ${executionData.length} facilities ` +
+      `do not have matching activity catalogs. These facilities will show zero values.`
+    );
+  }
+  
+  // Load subcategory names (same for all facility types, use first available facility type)
+  const firstFacilityType = Array.from(facilityTypes)[0];
+  const categories = await db
+    .select({
+      code: schemaActivityCategories.subCategoryCode,
+      name: schemaActivityCategories.name,
+    })
+    .from(schemaActivityCategories)
+    .where(
+      and(
+        eq(schemaActivityCategories.moduleType, 'execution' as any),
+        eq(schemaActivityCategories.projectType, projectType as any),
+        eq(schemaActivityCategories.facilityType, firstFacilityType as any),
+        eq(schemaActivityCategories.isSubCategory, true),
+        eq(schemaActivityCategories.isActive, true)
+      )
+    );
+  
+  const subcategoryNames: Record<string, string> = {};
+  categories.forEach(cat => {
+    if (cat.code) {
+      subcategoryNames[cat.code] = cat.name;
+    }
+  });
+  
+  const loadTime = Date.now() - startTime;
+  
+  console.log(`[MULTI-CATALOG] Loaded ${Object.keys(subcategoryNames).length} subcategory names`);
+  console.log(`[MULTI-CATALOG] Created facility-to-catalog mapping for ${Object.keys(facilityCatalogMap).length} facilities`);
+  
+  // Task 5: Log the number of activities included from each facility type in unified structure
+  console.log(`[MULTI-CATALOG] [SUMMARY] Activity catalog loading complete:`);
+  for (const [facilityType, catalog] of Object.entries(catalogsByType)) {
+    console.log(`[MULTI-CATALOG] [SUMMARY]   - ${facilityType}: ${catalog.length} activities`);
+  }
+  console.log(`[MULTI-CATALOG] [SUMMARY] Total facility types: ${Object.keys(catalogsByType).length}`);
+  console.log(`[MULTI-CATALOG] [SUMMARY] Total facilities mapped: ${Object.keys(facilityCatalogMap).length}`);
+  console.log(`[MULTI-CATALOG] [PERFORMANCE] Catalog loading completed in ${loadTime}ms`);
+  
+  // Task 6: Log catalog reuse statistics
+  const catalogReuseCount = executionData.length - facilityTypes.size;
+  if (catalogReuseCount > 0) {
+    console.log(
+      `[MULTI-CATALOG] [PERFORMANCE] Catalog reuse optimization: ` +
+      `${catalogReuseCount} facilities reused ${facilityTypes.size} catalogs ` +
+      `(${((catalogReuseCount / executionData.length) * 100).toFixed(1)}% reuse rate)`
+    );
+  }
+  
+  return { catalogsByType, facilityCatalogMap, subcategoryNames };
+}
+
 export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
   try {
     // Get user context and parse query parameters
@@ -2443,14 +2684,13 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       provinceName: r.province?.name
     }));
 
-    // Implement activity catalog loading with proper filtering
+    // Task 4: Load multiple activity catalogs for mixed facility types
     const contextProjectType = projectType || executionData[0]?.projectType;
-    const contextFacilityType = facilityType || executionData[0]?.facilityType;
 
-    if (!contextProjectType || !contextFacilityType) {
+    if (!contextProjectType) {
       return c.json(
         {
-          message: "Unable to determine project type or facility type for activity catalog",
+          message: "Unable to determine project type for activity catalog",
           error: "Missing context for activity catalog loading"
         },
         HttpStatusCodes.BAD_REQUEST
@@ -2458,85 +2698,37 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
     }
 
     let activityCatalog;
+    let subcategoryNames: Record<string, string>;
+    let facilityCatalogMap: FacilityCatalogMapping;
+    let catalogsByType: ActivityCatalogMap;
+    
     try {
-      // Load activity catalog with proper filtering
-      const activities = await db
-        .select({
-          code: dynamicActivities.code,
-          name: dynamicActivities.name,
-          displayOrder: dynamicActivities.displayOrder,
-          isTotalRow: dynamicActivities.isTotalRow,
-          fieldMappings: dynamicActivities.fieldMappings,
-        })
-        .from(dynamicActivities)
-        .leftJoin(schemaActivityCategories, eq(dynamicActivities.categoryId, schemaActivityCategories.id))
-        .where(
-          and(
-            eq(dynamicActivities.projectType, contextProjectType as any),
-            eq(dynamicActivities.facilityType, contextFacilityType as any),
-            eq(dynamicActivities.moduleType, 'execution'),
-            eq(dynamicActivities.isActive, true),
-            eq(schemaActivityCategories.isActive, true)
-          )
-        );
-
-      const categories = await db
-        .select({
-          id: schemaActivityCategories.id,
-          code: schemaActivityCategories.code,
-          name: schemaActivityCategories.name,
-          subCategoryCode: schemaActivityCategories.subCategoryCode,
-          isComputed: schemaActivityCategories.isComputed,
-          computationFormula: schemaActivityCategories.computationFormula,
-          displayOrder: schemaActivityCategories.displayOrder,
-          isSubCategory: schemaActivityCategories.isSubCategory,
-        })
-        .from(schemaActivityCategories)
-        .where(
-          and(
-            eq(schemaActivityCategories.moduleType, 'execution' as any),
-            eq(schemaActivityCategories.projectType, contextProjectType as any),
-            eq(schemaActivityCategories.facilityType, contextFacilityType as any),
-            eq(schemaActivityCategories.isActive, true)
-          )
-        );
-
-      // Transform to ActivityDefinition format
-      activityCatalog = activities.map(activity => {
-        const fieldMappings = activity.fieldMappings as any;
-        const category = fieldMappings?.category || 'A';
-        const subcategory = fieldMappings?.subcategory;
-
-        const categoryInfo = categories.find(c => c.code === category);
-
-        return {
-          code: activity.code as string,
-          name: activity.name as string,
-          category,
-          subcategory,
-          displayOrder: activity.displayOrder as number,
-          isSection: false,
-          isSubcategory: false,
-          isComputed: categoryInfo?.isComputed || false,
-          computationFormula: categoryInfo?.computationFormula || undefined,
-          level: subcategory ? 2 : 1
-        };
-      });
-
-      // Build subcategory names mapping from database
-      const subcategoryNames: Record<string, string> = {};
-      categories.forEach(cat => {
-        if (cat.subCategoryCode && cat.isSubCategory) {
-          subcategoryNames[cat.subCategoryCode] = cat.name;
-        }
-      });
-
       // Use aggregation service to process the data
       const { cleanedData, warnings } = aggregationService.handleMissingActivityData(executionData);
 
       if (warnings.length > 0) {
         console.warn('Data cleaning warnings:', warnings);
       }
+
+      // Task 4: Load multiple activity catalogs (one per facility type)
+      const catalogData = await loadMultipleActivityCatalogs(
+        cleanedData,
+        contextProjectType,
+        facilityType // Pass facilityType filter for backward compatibility
+      );
+      
+      catalogsByType = catalogData.catalogsByType;
+      facilityCatalogMap = catalogData.facilityCatalogMap;
+      subcategoryNames = catalogData.subcategoryNames;
+      
+      // Task 4: Build unified activity catalog from multiple facility types
+      const unifiedCatalog = aggregationService.buildUnifiedActivityCatalog(catalogsByType);
+      
+      // Task 5: Enhanced logging for multi-catalog system usage
+      const facilityTypesList = Object.keys(catalogsByType);
+      console.log(`[COMPILED-ENDPOINT] Using multi-catalog system with ${facilityTypesList.length} facility types: ${facilityTypesList.join(', ')}`);
+      console.log(`[COMPILED-ENDPOINT] Unified catalog contains ${unifiedCatalog.length} activities`);
+      console.log(`[COMPILED-ENDPOINT] Processing ${cleanedData.length} facilities across ${facilityTypesList.length} facility types`);
 
       // Task: Build hierarchical columns based on scope
       let columns;
@@ -2569,8 +2761,15 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       // Convert columns to FacilityColumn format for response
       const facilityColumns: FacilityColumn[] = columnsToFacilityColumns(columns);
 
-      // Aggregate data by activity using the aggregated execution data
-      const aggregatedData = aggregationService.aggregateByActivity(aggregatedExecutionData, activityCatalog);
+      // Task 4: Use multi-catalog aggregation function
+      const aggregatedData = aggregationService.aggregateByActivityWithMultipleCatalogs(
+        aggregatedExecutionData,
+        facilityCatalogMap,
+        unifiedCatalog
+      );
+      
+      // Use unified catalog for subsequent operations
+      activityCatalog = unifiedCatalog;
 
       // Calculate computed values
       const computedValues = aggregationService.calculateComputedValues(aggregatedData, activityCatalog);
@@ -2632,10 +2831,14 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       // Task 5.4: Add scope metadata to response
       const scopeDetails = await buildScopeMetadata(scope, { scope, districtId, provinceId }, filteredResults);
 
-      // Task 5.5: Add performance warning logic
+      // Task 6: Add performance warning when facility count exceeds 100
       let performanceWarning: string | undefined;
-      if (scope === 'country' && facilityColumns.length > 100) {
-        performanceWarning = "Large dataset: Consider using filters to improve performance";
+      if (facilityColumns.length > 100) {
+        performanceWarning = `Large dataset (${facilityColumns.length} facilities): Consider using filters to improve performance`;
+        console.warn(
+          `[COMPILED-ENDPOINT] [PERFORMANCE] Response includes ${facilityColumns.length} facilities. ` +
+          `Large datasets may impact client-side rendering performance.`
+        );
       }
 
       const response: CompiledExecutionResponse = {
@@ -2659,11 +2862,42 @@ export const compiled: AppRouteHandler<CompiledRoute> = async (c) => {
       return c.json(response, HttpStatusCodes.OK);
 
     } catch (catalogError: any) {
-      console.error('Activity catalog loading failed:', catalogError);
+      // Task 5: Enhanced error responses for catalog loading failures with appropriate HTTP status codes
+      console.error('[COMPILED-ENDPOINT] [ERROR] Activity catalog loading failed:', catalogError);
+      console.error('[COMPILED-ENDPOINT] [ERROR] Error details:', {
+        errorMessage: catalogError?.message || 'Unknown error',
+        errorStack: catalogError?.stack,
+        projectType: contextProjectType,
+        facilityType: facilityType || 'all',
+        facilityCount: executionData?.length || 0
+      });
+      
+      // Determine appropriate error response based on error type
+      if (catalogError?.message?.includes('Failed to load activity catalog for facility type')) {
+        // Specific facility type catalog loading failure
+        return c.json(
+          {
+            message: "Failed to load activity catalog for one or more facility types",
+            error: catalogError.message,
+            details: {
+              projectType: contextProjectType,
+              facilityType: facilityType || 'multiple',
+              suggestion: "Verify that activity catalogs are configured for all facility types in this project"
+            }
+          },
+          HttpStatusCodes.INTERNAL_SERVER_ERROR
+        );
+      }
+      
+      // Generic catalog loading failure
       return c.json(
         {
           message: "Failed to load activity catalog",
-          error: "Unable to load activity definitions"
+          error: "Unable to load activity definitions for the requested facility types",
+          details: {
+            projectType: contextProjectType,
+            errorMessage: catalogError?.message || 'Unknown error'
+          }
         },
         HttpStatusCodes.INTERNAL_SERVER_ERROR
       );

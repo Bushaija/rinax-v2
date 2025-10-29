@@ -1,4 +1,4 @@
-import type { ActivityRow } from "../../api/routes/execution/execution.types";
+import type { ActivityRow, ActivityCatalogMap, UnifiedActivity } from "../../api/routes/execution/execution.types";
 
 // Types for internal processing
 interface ExecutionEntry {
@@ -51,6 +51,78 @@ export class AggregationService {
   // Expose matchActivityCode for testing
   public matchActivityCode(activityCode: string, availableCodes: string[]): string | null {
     return this.matchActivityCodeInternal(activityCode, availableCodes);
+  }
+
+  /**
+   * Task 2: Build unified activity structure
+   * Build a unified activity structure from multiple facility-type-specific catalogs
+   * This merges catalogs from different facility types into a single structure
+   */
+  buildUnifiedActivityCatalog(catalogsByType: ActivityCatalogMap): UnifiedActivity[] {
+    const unifiedMap = new Map<string, UnifiedActivity>();
+    
+    // Process each facility type's catalog
+    for (const [facilityType, catalog] of Object.entries(catalogsByType)) {
+      for (const activity of catalog) {
+        // Create a normalized key for grouping similar activities
+        // Activities with same category, subcategory, and display order are considered similar
+        const normalizedKey = `${activity.category}_${activity.subcategory || 'none'}_${activity.displayOrder}`;
+        
+        if (unifiedMap.has(normalizedKey)) {
+          // Activity already exists - add this facility type
+          const existing = unifiedMap.get(normalizedKey)!;
+          existing.facilityTypes.push(facilityType);
+        } else {
+          // New activity - add to unified structure
+          unifiedMap.set(normalizedKey, {
+            ...activity,
+            facilityTypes: [facilityType],
+            sourceCode: activity.code
+          });
+        }
+      }
+    }
+    
+    // Convert map to array and sort by category first, then display order
+    const unifiedCatalog = Array.from(unifiedMap.values())
+      .sort((a, b) => {
+        // Sort by category first
+        if (a.category !== b.category) {
+          return a.category.localeCompare(b.category);
+        }
+        // Then by display order
+        return a.displayOrder - b.displayOrder;
+      });
+    
+    // Task 5: Log the number of activities included from each facility type in unified structure
+    console.log(`[UNIFIED-CATALOG] Built unified catalog with ${unifiedCatalog.length} activities from ${Object.keys(catalogsByType).length} facility types`);
+    
+    // Task 5: Log detailed breakdown of activities per facility type
+    const activityBreakdown: Record<string, number> = {};
+    for (const [facilityType, catalog] of Object.entries(catalogsByType)) {
+      activityBreakdown[facilityType] = catalog.length;
+    }
+    console.log(`[UNIFIED-CATALOG] [SUMMARY] Activities per facility type:`, activityBreakdown);
+    
+    // Task 5: Log activities that exist in only one facility type
+    const singleTypeActivities = unifiedCatalog.filter(a => a.facilityTypes.length === 1);
+    if (singleTypeActivities.length > 0) {
+      console.log(
+        `[UNIFIED-CATALOG] [INFO] ${singleTypeActivities.length} activities exist in only one facility type. ` +
+        `These will show zero values for other facility types.`
+      );
+    }
+    
+    // Task 5: Log activities that exist in multiple facility types
+    const multiTypeActivities = unifiedCatalog.filter(a => a.facilityTypes.length > 1);
+    if (multiTypeActivities.length > 0) {
+      console.log(
+        `[UNIFIED-CATALOG] [INFO] ${multiTypeActivities.length} activities exist in multiple facility types ` +
+        `(${multiTypeActivities[0].facilityTypes.join(', ')})`
+      );
+    }
+    
+    return unifiedCatalog;
   }
   
   /**
@@ -300,6 +372,176 @@ export class AggregationService {
           }
         }
       }
+    }
+    
+    return aggregated;
+  }
+
+  /**
+   * Task 3: Aggregate execution data using facility-specific activity catalogs
+   * This function handles mixed facility types by matching each facility's data
+   * to its appropriate catalog based on category, subcategory, and display order
+   * 
+   * Task 6: Performance optimizations:
+   * - Uses Map data structures for O(1) activity lookups
+   * - Processes facilities in single pass
+   * - Efficient catalog reuse (catalogs are pre-loaded and mapped)
+   */
+  aggregateByActivityWithMultipleCatalogs(
+    executionData: ExecutionEntry[],
+    facilityCatalogMap: Record<string, ActivityDefinition[]>,
+    unifiedCatalog: UnifiedActivity[]
+  ): AggregatedData {
+    const aggregated: AggregatedData = {};
+    
+    // Initialize aggregated data structure for all unified activities
+    for (const activity of unifiedCatalog) {
+      aggregated[activity.code] = {};
+    }
+    
+    console.log(`[MULTI-CATALOG-AGGREGATION] Processing ${executionData.length} facilities with ${unifiedCatalog.length} unified activities`);
+    
+    // Task 6: Add performance warning when facility count exceeds 100
+    if (executionData.length > 100) {
+      console.warn(
+        `[MULTI-CATALOG-AGGREGATION] [PERFORMANCE] Processing ${executionData.length} facilities. ` +
+        `Large dataset may impact response time. Consider using filters to reduce scope.`
+      );
+    }
+    
+    // Task 5: Track statistics for logging
+    let facilitiesWithoutCatalog = 0;
+    let totalActivityMatches = 0;
+    let totalActivityMismatches = 0;
+    
+    // Task 6: Build Map index for facility catalogs for O(1) lookups
+    // Key: "category_subcategory_displayOrder" -> Value: ActivityDefinition
+    const facilityCatalogIndexMap = new Map<string, Map<string, ActivityDefinition>>();
+    
+    for (const [facilityId, catalog] of Object.entries(facilityCatalogMap)) {
+      const catalogIndex = new Map<string, ActivityDefinition>();
+      for (const activity of catalog) {
+        const key = `${activity.category}_${activity.subcategory || 'none'}_${activity.displayOrder}`;
+        catalogIndex.set(key, activity);
+      }
+      facilityCatalogIndexMap.set(facilityId, catalogIndex);
+    }
+    
+    console.log(`[MULTI-CATALOG-AGGREGATION] [PERFORMANCE] Built catalog index for ${facilityCatalogIndexMap.size} facilities`);
+    
+    // Task 6: Process each facility's execution data in single pass
+    for (const entry of executionData) {
+      const facilityId = entry.facilityId.toString();
+      const facilityCatalog = facilityCatalogMap[facilityId];
+      const catalogIndex = facilityCatalogIndexMap.get(facilityId);
+      
+      if (!facilityCatalog || !catalogIndex) {
+        // Task 5: Enhanced warning when catalog is missing for a facility
+        console.warn(
+          `[MULTI-CATALOG-AGGREGATION] [WARNING] No catalog found for facility ${facilityId} ` +
+          `(${entry.facilityName}, type: ${entry.facilityType}). All activities will show zero values.`
+        );
+        facilitiesWithoutCatalog++;
+        
+        // Use zero values for all activities for this facility
+        for (const activity of unifiedCatalog) {
+          aggregated[activity.code][facilityId] = { q1: 0, q2: 0, q3: 0, q4: 0, total: 0 };
+        }
+        continue;
+      }
+      
+      // Task 6: Build Set of available codes for O(1) lookup instead of array includes
+      const availableCodesSet = new Set<string>();
+      if (entry.formData?.activities && typeof entry.formData.activities === 'object' && !Array.isArray(entry.formData.activities)) {
+        for (const code of Object.keys(entry.formData.activities)) {
+          availableCodesSet.add(code);
+        }
+      } else if (Array.isArray(entry.formData?.activities)) {
+        for (const activity of entry.formData.activities) {
+          if (activity?.code) {
+            availableCodesSet.add(activity.code);
+          }
+        }
+      }
+      
+      console.log(
+        `[MULTI-CATALOG-AGGREGATION] Facility ${facilityId} (${entry.facilityName}, type: ${entry.facilityType}): ` +
+        `${availableCodesSet.size} activities in data, ${facilityCatalog.length} activities in catalog`
+      );
+      
+      // Task 5: Track matches and mismatches for this facility
+      let facilityMatches = 0;
+      let facilityMismatches = 0;
+      
+      // Task 6: Process each activity in the unified catalog using Map lookup (O(1) instead of O(n))
+      for (const unifiedActivity of unifiedCatalog) {
+        // Task 6: Use Map lookup instead of array.find() for better performance
+        const lookupKey = `${unifiedActivity.category}_${unifiedActivity.subcategory || 'none'}_${unifiedActivity.displayOrder}`;
+        const facilityActivity = catalogIndex.get(lookupKey);
+        
+        if (facilityActivity && availableCodesSet.has(facilityActivity.code)) {
+          // Extract values using the facility-specific activity code
+          const values = this.extractActivityValues(entry.formData, facilityActivity.code);
+          aggregated[unifiedActivity.code][facilityId] = values;
+          
+          // Task 5: Track successful match
+          facilityMatches++;
+          totalActivityMatches++;
+          
+          console.log(
+            `[MULTI-CATALOG-AGGREGATION] Facility ${facilityId}: ${unifiedActivity.code} matched to ${facilityActivity.code}, ` +
+            `values: q1=${values.q1}, q2=${values.q2}, q3=${values.q3}, q4=${values.q4}, total=${values.total}`
+          );
+        } else {
+          // Use zero values for missing activities
+          aggregated[unifiedActivity.code][facilityId] = { q1: 0, q2: 0, q3: 0, q4: 0, total: 0 };
+          
+          // Task 5: Track mismatch
+          facilityMismatches++;
+          totalActivityMismatches++;
+          
+          if (facilityActivity) {
+            // Task 5: Enhanced warning when activity code doesn't match between facility data and catalog
+            console.warn(
+              `[MULTI-CATALOG-AGGREGATION] [WARNING] Activity code mismatch for facility ${facilityId} (${entry.facilityName}): ` +
+              `${unifiedActivity.code} matched to catalog activity ${facilityActivity.code} ` +
+              `but code not found in facility data. Available codes: ${availableCodesSet.size}. Using zero values.`
+            );
+          } else {
+            // Task 5: Enhanced warning when activity not found in catalog
+            console.warn(
+              `[MULTI-CATALOG-AGGREGATION] [WARNING] Activity not found in catalog for facility ${facilityId} (${entry.facilityName}): ` +
+              `${unifiedActivity.code} (category=${unifiedActivity.category}, subcategory=${unifiedActivity.subcategory || 'none'}, ` +
+              `displayOrder=${unifiedActivity.displayOrder}). Using zero values.`
+            );
+          }
+        }
+      }
+      
+      // Task 5: Log summary for this facility
+      console.log(
+        `[MULTI-CATALOG-AGGREGATION] Facility ${facilityId} summary: ` +
+        `${facilityMatches} matches, ${facilityMismatches} mismatches out of ${unifiedCatalog.length} activities`
+      );
+    }
+    
+    // Task 5: Log overall aggregation summary
+    console.log(`[MULTI-CATALOG-AGGREGATION] [SUMMARY] Aggregation complete for ${executionData.length} facilities`);
+    console.log(`[MULTI-CATALOG-AGGREGATION] [SUMMARY] Total activity matches: ${totalActivityMatches}`);
+    console.log(`[MULTI-CATALOG-AGGREGATION] [SUMMARY] Total activity mismatches: ${totalActivityMismatches}`);
+    
+    if (facilitiesWithoutCatalog > 0) {
+      console.warn(
+        `[MULTI-CATALOG-AGGREGATION] [WARNING] ${facilitiesWithoutCatalog} facilities had no catalog mapping`
+      );
+    }
+    
+    if (totalActivityMismatches > 0) {
+      const mismatchPercentage = ((totalActivityMismatches / (totalActivityMatches + totalActivityMismatches)) * 100).toFixed(2);
+      console.warn(
+        `[MULTI-CATALOG-AGGREGATION] [WARNING] ${mismatchPercentage}% of activity lookups resulted in mismatches. ` +
+        `This may indicate data quality issues or catalog inconsistencies.`
+      );
     }
     
     return aggregated;

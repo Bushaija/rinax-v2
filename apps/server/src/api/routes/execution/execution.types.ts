@@ -271,3 +271,31 @@ export type FacilityTotals = z.infer<typeof facilityTotalsSchema>;
 export type AppliedFilters = z.infer<typeof appliedFiltersSchema>;
 export type ScopeDetails = z.infer<typeof scopeDetailsSchema>;
 export type CompiledExecutionResponse = z.infer<typeof compiledExecutionResponseSchema>;
+
+// Multi-catalog support interfaces
+export interface ActivityDefinition {
+  code: string;
+  name: string;
+  category: string;
+  subcategory?: string;
+  displayOrder: number;
+  isSection: boolean;
+  isSubcategory: boolean;
+  isComputed: boolean;
+  computationFormula?: string;
+  level: number;
+}
+
+export interface ActivityCatalogMap {
+  [facilityType: string]: ActivityDefinition[];
+}
+
+export interface FacilityCatalogMapping {
+  [facilityId: string]: ActivityDefinition[];
+}
+
+// Unified activity structure for multi-catalog support
+export interface UnifiedActivity extends ActivityDefinition {
+  facilityTypes: string[]; // Which facility types have this activity
+  sourceCode?: string; // Original code if normalized
+}
