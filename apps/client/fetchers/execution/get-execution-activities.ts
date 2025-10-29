@@ -18,11 +18,17 @@ export interface ExecutionActivity {
 }
 
 export async function getExecutionActivities(params: {
-  projectType?: "HIV" | "Malaria" | "TB";
+  projectType?: "HIV" | "MAL" | "TB" | "Malaria";
   facilityType?: "hospital" | "health_center";
 }) {
+  // Convert MAL to Malaria for API compatibility
+  const apiParams = {
+    ...params,
+    projectType: params.projectType === 'MAL' ? 'Malaria' : params.projectType
+  };
+  
   const response = await (client.execution as any)["activities"].$get({
-    query: params,
+    query: apiParams,
   });
 
   if (!response.ok) {

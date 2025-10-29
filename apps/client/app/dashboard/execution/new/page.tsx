@@ -19,11 +19,13 @@ export default async function CreateDynamicExecutionPage(props: PageProps) {
   const rawFacilityType = asString(awaitedSearchParams.facilityType).trim();
   const rawQuarter = asString(awaitedSearchParams.quarter).trim();
 
-  const allowedPrograms = new Set(["HIV", "Malaria", "TB"]);
+  const allowedPrograms = new Set(["HIV", "Malaria", "TB", "MAL"]); // Accept both Malaria and MAL
   const allowedFacilityTypes = new Set(["hospital", "health_center"]);
   const allowedQuarters = new Set(["Q1", "Q2", "Q3", "Q4"]);
 
-  const projectType = (allowedPrograms.has(rawProgram) ? rawProgram : "HIV") as "HIV" | "Malaria" | "TB";
+  // Normalize Malaria to MAL for consistency with activity codes
+  const normalizedProgram = rawProgram.toUpperCase() === "MALARIA" ? "MAL" : rawProgram;
+  const projectType = (allowedPrograms.has(normalizedProgram) ? normalizedProgram : "HIV") as "HIV" | "MAL" | "TB";
   const facilityType = (allowedFacilityTypes.has(rawFacilityType) ? rawFacilityType : "health_center") as "hospital" | "health_center";
   
 
@@ -53,7 +55,7 @@ export default async function CreateDynamicExecutionPage(props: PageProps) {
         facilityId={awaitedSearchParams.facilityId ? Number(awaitedSearchParams.facilityId) : undefined}
         reportingPeriodId={awaitedSearchParams.reportingPeriodId ? Number(awaitedSearchParams.reportingPeriodId) : undefined}
         facilityName={asString(awaitedSearchParams.facilityName) || undefined}
-        programName={projectType} // Use the resolved projectType instead
+        programName={projectType === 'MAL' ? 'Malaria' : projectType} // Convert MAL back to Malaria for display
       />
     </div>
   );

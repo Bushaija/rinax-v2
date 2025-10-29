@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useSmartExecutionSubmission, type SmartExecutionSubmissionParams } from "@/hooks/mutations/executions/use-smart-execution-submission";
 
 interface UseExecutionSubmissionHandlerParams {
-  projectType: "HIV" | "Malaria" | "TB";
+  projectType: "HIV" | "MAL" | "TB"; // Changed from "Malaria" to "MAL" for consistency with activity codes
   facilityType: "hospital" | "health_center";
   quarter: "Q1" | "Q2" | "Q3" | "Q4";
   schemaId?: number;

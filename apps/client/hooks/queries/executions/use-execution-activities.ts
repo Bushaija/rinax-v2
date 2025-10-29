@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getExecutionActivities } from "@/fetchers/execution/get-execution-activities";
 
 interface UseExecutionActivitiesParams {
-  projectType?: "HIV" | "Malaria" | "TB";
+  projectType?: "HIV" | "MAL" | "TB" | "Malaria"; // Accept both MAL and Malaria for backward compatibility
   facilityType?: "hospital" | "health_center";
   enabled?: boolean;
 }

@@ -6,7 +6,7 @@ import { useCalculateExecutionBalances } from "./mutations/executions/use-calcul
 import { useValidateAccountingEquation } from "./mutations/executions/use-validate-accounting-equation";
 import { useDebounce } from "@/hooks/use-debounce";
 
-type ProjectType = "HIV" | "Malaria" | "TB";
+type ProjectType = "HIV" | "MAL" | "TB"; // Changed from "Malaria" to "MAL" for consistency with activity codes
 type FacilityType = "hospital" | "health_center";
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 

@@ -3,6 +3,7 @@ import { schemaFormDataEntries } from "@/db/schema/schema-form-data-entries/sche
 import { users } from "@/db/schema/users/schema";
 import { eq } from "drizzle-orm";
 import { notificationService } from "./notification.service";
+import { auditService } from "./audit.service";
 import { ApprovalError, ApprovalErrorFactory } from "@/lib/errors/approval.errors";
 
 export interface ApprovalRequest {
@@ -32,6 +33,31 @@ export interface ExecutionPermissionResult {
 }
 
 export class ApprovalService {
+  /**
+   * Calculates the total budget from a plan's formData
+   * @param formData - The formData object containing activities with budgets
+   * @returns Total budget amount, or 0 if formData is missing or malformed
+   * @private
+   */
+  private calculatePlanBudget(formData: any): number {
+    try {
+      if (!formData?.activities) {
+        console.warn('FormData missing activities field, returning budget as 0');
+        return 0;
+      }
+
+      const activities = Object.values(formData.activities);
+      const totalBudget = activities.reduce((sum: number, activity: any) => {
+        return sum + (activity?.total_budget || 0);
+      }, 0);
+
+      return totalBudget;
+    } catch (error) {
+      console.warn('Error calculating plan budget, returning 0:', error);
+      return 0;
+    }
+  }
+
   /**
    * Approves a plan with status validation and user permission checks
    * @param planningId - The ID of the plan to approve
@@ -78,6 +104,9 @@ export class ApprovalService {
         );
       }
 
+      // Calculate budget amount before approval
+      const budgetAmount = this.calculatePlanBudget(plan.formData);
+
       // Update plan status to APPROVED
       const updatedPlan = await db.update(schemaFormDataEntries)
         .set({
@@ -96,6 +125,21 @@ export class ApprovalService {
       }
 
       const updated = updatedPlan[0];
+
+      // Log to audit with budget information
+      try {
+        await auditService.logApprovalAction(
+          planningId,
+          plan.approvalStatus,
+          'APPROVED',
+          adminId,
+          comments,
+          { budgetAmount }
+        );
+      } catch (auditError) {
+        console.error('Failed to log approval to audit:', auditError);
+        // Don't fail the approval if audit logging fails
+      }
       
       // Send notification to planner about approval decision
       try {
@@ -190,6 +234,9 @@ export class ApprovalService {
         );
       }
 
+      // Calculate budget amount before rejection
+      const budgetAmount = this.calculatePlanBudget(plan.formData);
+
       // Update plan status to REJECTED
       const updatedPlan = await db.update(schemaFormDataEntries)
         .set({
@@ -208,6 +255,21 @@ export class ApprovalService {
       }
 
       const updated = updatedPlan[0];
+
+      // Log to audit with budget information
+      try {
+        await auditService.logApprovalAction(
+          planningId,
+          plan.approvalStatus,
+          'REJECTED',
+          adminId,
+          comments.trim(),
+          { budgetAmount }
+        );
+      } catch (auditError) {
+        console.error('Failed to log rejection to audit:', auditError);
+        // Don't fail the rejection if audit logging fails
+      }
       
       // Send notification to planner about rejection decision
       try {

@@ -18,7 +18,7 @@ import { useExpenseCalculations } from "@/features/execution/hooks/use-expense-c
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
 interface EnhancedExecutionFormAutoLoadProps {
-  projectType: "HIV" | "Malaria" | "TB";
+  projectType: "HIV" | "MAL" | "TB"; // Changed from "Malaria" to "MAL" for consistency with activity codes
   facilityType: "hospital" | "health_center";
   quarter: Quarter;
   mode?: "create" | "edit" | "view" | "readOnly";
@@ -199,6 +199,7 @@ export function EnhancedExecutionFormAutoLoad({
   });
   
   // Debug: Check if Section D and E codes exist in formData
+  // projectType is already normalized to MAL (not Malaria) at the page level
   const projectPrefix = projectType.toUpperCase();
   const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
   const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
@@ -237,6 +238,7 @@ export function EnhancedExecutionFormAutoLoad({
       return;
     }
 
+    // projectType is already normalized to MAL (not Malaria) at the page level
     const projectPrefix = projectType.toUpperCase();
     const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
     const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
@@ -245,8 +247,12 @@ export function EnhancedExecutionFormAutoLoad({
     const currentCashValue = form.formData[cashAtBankCode]?.[quarterKey];
     
     console.log('💰 [AutoLoad] Updating Cash at Bank:', {
+      projectType,
+      projectPrefix,
+      facilityPrefix,
       cashAtBankCode,
       currentValue: currentCashValue,
+      allFormDataKeys: Object.keys(form.formData).filter(k => k.includes('_D_')),
       newValue: cashAtBank,
       willUpdate: currentCashValue !== cashAtBank,
       formDataHasCode: cashAtBankCode in form.formData,

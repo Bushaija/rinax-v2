@@ -52,6 +52,7 @@ export async function fetchPlanningEntries(filters: AggregationFilters) {
     eq(schemaFormDataEntries.entityType, 'planning'),
     eq(schemaFormDataEntries.reportingPeriodId, filters.reportingPeriodId),
     inArray(schemaFormDataEntries.facilityId, filters.facilityIds),
+    eq(schemaFormDataEntries.approvalStatus, 'APPROVED'),
   ];
 
   // Apply quarter filter if provided

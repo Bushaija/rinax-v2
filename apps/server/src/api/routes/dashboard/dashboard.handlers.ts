@@ -578,6 +578,7 @@ export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute
     const planningConditions = [
       eq(schema.schemaFormDataEntries.entityType, 'planning'),
       eq(schema.schemaFormDataEntries.reportingPeriodId, currentPeriod.id),
+      eq(schema.schemaFormDataEntries.approvalStatus, 'APPROVED'),
     ];
     
     // Apply quarter filter if provided

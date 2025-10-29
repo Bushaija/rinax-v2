@@ -26,7 +26,8 @@ export const getBudgetExecutionRates: AppRouteHandler<GetBudgetExecutionRatesRou
     const planningData = await db.query.schemaFormDataEntries.findMany({
       where: and(
         ...conditions,
-        eq(schemaFormDataEntries.entityType, 'planning')
+        eq(schemaFormDataEntries.entityType, 'planning'),
+        eq(schemaFormDataEntries.approvalStatus, 'APPROVED')
       )
     });
 

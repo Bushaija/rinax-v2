@@ -18,7 +18,7 @@ import { useExpenseCalculations } from "@/features/execution/hooks/use-expense-c
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
 interface EnhancedExecutionFormProps {
-  projectType: "HIV" | "Malaria" | "TB";
+  projectType: "HIV" | "MAL" | "TB"; // Changed from "Malaria" to "MAL" for consistency with activity codes
   facilityType: "hospital" | "health_center";
   quarter: Quarter;
   mode?: "create" | "edit" | "view" | "readOnly";
@@ -161,6 +161,7 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
     if (!form.activities) return;
 
     // Update Cash at Bank (D-1)
+    // projectType is already normalized to MAL (not Malaria) at the page level
     const projectPrefix = projectType.toUpperCase();
     const facilityPrefix = facilityType === 'health_center' ? 'HEALTH_CENTER' : 'HOSPITAL';
     const cashAtBankCode = `${projectPrefix}_EXEC_${facilityPrefix}_D_1`;
@@ -169,6 +170,9 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
     const currentCashValue = form.formData[cashAtBankCode]?.[quarterKey];
     
     console.log('💰 [Payment Tracking] Updating Cash at Bank:', {
+      projectType,
+      projectPrefix,
+      facilityPrefix,
       cashAtBankCode,
       quarterKey,
       currentValue: currentCashValue,
@@ -176,6 +180,7 @@ export function EnhancedExecutionForm({ projectType, facilityType, quarter, mode
       willUpdate: currentCashValue !== cashAtBank,
       formDataHasCode: cashAtBankCode in form.formData,
       formDataEntry: form.formData[cashAtBankCode],
+      allFormDataKeys: Object.keys(form.formData).filter(k => k.includes('_D_')),
     });
     
     // Only update if the value has changed to avoid infinite loops

@@ -75,7 +75,7 @@ export const banUser = createRoute({
   request: {
     body: jsonContentRequired(
       z.object({
-        userId: z.union([z.string(), z.number()]).transform((val) => 
+        userId: z.union([z.string(), z.number()]).transform((val) =>
           typeof val === 'string' ? parseInt(val, 10) : val
         ),
         banReason: z.string().min(1, "Ban reason is required"),
@@ -123,7 +123,7 @@ export const unbanUser = createRoute({
   request: {
     body: jsonContentRequired(
       z.object({
-        userId: z.union([z.string(), z.number()]).transform((val) => 
+        userId: z.union([z.string(), z.number()]).transform((val) =>
           typeof val === 'string' ? parseInt(val, 10) : val
         ),
         reason: z.string().optional().describe("Reason for unbanning (optional)"),

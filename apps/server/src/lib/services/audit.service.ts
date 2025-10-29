@@ -22,6 +22,7 @@ export interface AuditEntry {
 }
 
 export interface AuditMetadata {
+  budgetAmount?: number;
   ipAddress?: string;
   userAgent?: string;
   sessionId?: string;

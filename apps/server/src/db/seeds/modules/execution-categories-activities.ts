@@ -65,7 +65,7 @@ const hivActivities: ActivityData[] = [
     { categoryCode: 'B', subCategoryCode: 'B-03', name: 'Transport and travel for survey/surveillance', displayOrder: 3, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
 
     // B. Expenditures - Overheads (facility-specific variations)
-    
+
     // receivables
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Airtime', displayOrder: 1, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
     { categoryCode: 'B', subCategoryCode: 'B-04', name: 'Communication - Internet', displayOrder: 2, isTotalRow: false, activityType: 'EXPENSE', applicableTo: 'both' },
@@ -88,18 +88,20 @@ const hivActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 5, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 1: Salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 2: Supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 3: Meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 4: Sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 5: Home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 6: Travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 7: Communication - airtime', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 8: Communication - internet', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 9: Infrastructure support', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 10: Supplies', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 11: Transport reporting', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 12: Bank charges', displayOrder: 12, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 13: VAT refund', displayOrder: 13, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 14, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
 
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
@@ -149,22 +151,24 @@ const malariaActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'Petty cash', displayOrder: 2, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Receivables (VAT refund)', displayOrder: 3, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Other Receivables', displayOrder: 4, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
-    { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 6, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
+    { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 5, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
-    
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 1: Salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 2: Supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 3: Meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 4: Sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 5: Home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 6: Travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 7: Communication - airtime', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 8: Communication - internet', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 9: Infrastructure support', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 10: Supplies', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 11: Transport reporting', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 12: Bank charges', displayOrder: 12, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 13: VAT refund', displayOrder: 13, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 14, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
 
@@ -213,22 +217,24 @@ const tbActivities: ActivityData[] = [
     { categoryCode: 'D', subCategoryCode: null, name: 'Petty cash', displayOrder: 2, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Receivables (VAT refund)', displayOrder: 3, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
     { categoryCode: 'D', subCategoryCode: null, name: 'Other Receivables', displayOrder: 4, isTotalRow: false, activityType: 'ASSET', applicableTo: 'both' },
-    { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 6, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
+    { categoryCode: 'D', subCategoryCode: null, name: 'D. Financial Assets', displayOrder: 5, isTotalRow: true, activityType: 'ASSET_TOTAL', applicableTo: 'both' },
 
     // E. Financial Liabilities (facility-specific)
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 1: salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 2: supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 3: meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 4: sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 5: home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 6: travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 7: infrastructure support', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 8: supplies', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 9: transport reporting', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 10: bank charges', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'payable 11: VAT refund', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
-    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 12, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
-    
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 1: Salaries', displayOrder: 1, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 2: Supervision', displayOrder: 2, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 3: Meetings', displayOrder: 3, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 4: Sample transport', displayOrder: 4, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 5: Home visits', displayOrder: 5, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 6: Travel survellance', displayOrder: 6, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 7: Communication - airtime', displayOrder: 7, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 8: Communication - internet', displayOrder: 8, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 9: Infrastructure support', displayOrder: 9, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 10: Supplies', displayOrder: 10, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 11: Transport reporting', displayOrder: 11, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 12: Bank charges', displayOrder: 12, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'Payable 13: VAT refund', displayOrder: 13, isTotalRow: false, activityType: 'LIABILITY', applicableTo: 'both' },
+    { categoryCode: 'E', subCategoryCode: null, name: 'E. Financial Liabilities', displayOrder: 14, isTotalRow: true, activityType: 'LIABILITY_TOTAL', applicableTo: 'both' },
+
     // F. Net Financial Assets (computed for both)
     { categoryCode: 'F', subCategoryCode: null, name: 'F. Net Financial Assets', displayOrder: 1, isTotalRow: true, activityType: 'COMPUTED', computationRules: { formula: 'D - E', description: 'Financial Assets minus Financial Liabilities' }, applicableTo: 'both' },
 
@@ -242,9 +248,9 @@ const tbActivities: ActivityData[] = [
 
 // Helper function to get or create category in schema_activity_categories for specific facility types
 async function getOrCreateCategoryForFacility(
-    db: Database, 
-    categoryCode: string, 
-    categoryName: string, 
+    db: Database,
+    categoryCode: string,
+    categoryName: string,
     projectType: 'HIV' | 'MAL' | 'TB',
     facilityType: 'hospital' | 'health_center',
     displayOrder: number,
@@ -272,7 +278,7 @@ async function getOrCreateCategoryForFacility(
         .insert(schema.schemaActivityCategories)
         .values({
             code: `${projectType}_EXEC_${categoryCode}`,
-            name: `${categoryName}`,            
+            name: `${categoryName}`,
             // name: `${categoryName} (${facilityType})`,    
             description: `Execution category for ${projectType} ${facilityType}: ${categoryName}`,
             moduleType: 'execution',
@@ -294,9 +300,9 @@ async function getOrCreateCategoryForFacility(
 }
 
 async function getOrCreateExecutionCategory(
-    db: Database, 
-    categoryCode: string, 
-    categoryName: string, 
+    db: Database,
+    categoryCode: string,
+    categoryName: string,
     projectType: 'HIV' | 'MAL' | 'TB',
     facilityType: 'hospital' | 'health_center',
     displayOrder: number,
@@ -402,18 +408,18 @@ async function getOrCreateExecutionSubCategory(
 
 // ENHANCED: Function to seed execution categories for specific program and facility type
 async function seedExecutionCategoriesForProgramAndFacility(
-    db: Database, 
-    projectType: 'HIV' | 'MAL' | 'TB', 
+    db: Database,
+    projectType: 'HIV' | 'MAL' | 'TB',
     facilityType: 'hospital' | 'health_center',
     categories: CategoryData[]
 ) {
     console.log(`Seeding execution categories for ${projectType} ${facilityType}...`);
-    
+
     for (const category of categories) {
         await getOrCreateCategoryForFacility(
-            db, 
-            category.code, 
-            category.name, 
+            db,
+            category.code,
+            category.name,
             projectType,
             facilityType,
             category.displayOrder,
@@ -424,9 +430,9 @@ async function seedExecutionCategoriesForProgramAndFacility(
 
 async function verifyExecutionActivities(db: Database, projectType: 'HIV' | 'MAL' | 'TB') {
     console.log(`\nVerifying execution activities for ${projectType}...`);
-    
+
     const dbProjectType = toDbProjectType(projectType);
-    
+
     // FIXED: Use sql for count aggregation
     const counts = await db
         .select({
@@ -450,7 +456,7 @@ async function verifyExecutionActivities(db: Database, projectType: 'HIV' | 'MAL
     // Ensure we have activities for both facility types
     const hasHospital = counts.some(r => r.facilityType === 'hospital');
     const hasHealthCenter = counts.some(r => r.facilityType === 'health_center');
-    
+
     if (!hasHospital || !hasHealthCenter) {
         console.warn(`⚠ Warning: Missing facility type coverage for ${projectType}`);
         console.warn(`  Hospital: ${hasHospital ? 'Yes' : 'No'}`);
@@ -462,8 +468,8 @@ async function verifyExecutionActivities(db: Database, projectType: 'HIV' | 'MAL
 
 // ENHANCED: Main function to seed execution activities with proper facility targeting
 export async function seedExecutionActivitiesForProgramInternal(
-    db: Database, 
-    projectType: 'HIV' | 'MAL' | 'TB', 
+    db: Database,
+    projectType: 'HIV' | 'MAL' | 'TB',
     activities: Array<{
         categoryCode: string;
         subCategoryCode?: string | null;
@@ -477,7 +483,7 @@ export async function seedExecutionActivitiesForProgramInternal(
 ) {
     console.log(`\n📊 EXECUTION SEEDER: ${projectType}`);
     console.log(`Processing ${activities.length} activity definitions...`);
-    
+
     const facilityTypes: Array<'hospital' | 'health_center'> = ['hospital', 'health_center'];
     let totalInserted = 0;
     let totalUpdated = 0;
@@ -486,9 +492,9 @@ export async function seedExecutionActivitiesForProgramInternal(
     // Process each facility type separately to avoid conflicts
     for (const facilityType of facilityTypes) {
         console.log(`\n  🏥 ${facilityType.toUpperCase()}`);
-        
+
         // Filter activities applicable to this facility type
-        const applicableActivities = activities.filter(activity => 
+        const applicableActivities = activities.filter(activity =>
             activity.applicableTo === facilityType || activity.applicableTo === 'both'
         );
 
@@ -501,7 +507,7 @@ export async function seedExecutionActivitiesForProgramInternal(
         }
 
         const activitiesToInsert = [];
-        
+
         for (const activity of applicableActivities) {
             // Ensure parent category exists (A, B, C, D, E, F, G)
             const parentCategoryId = await getOrCreateExecutionCategory(
@@ -524,12 +530,12 @@ export async function seedExecutionActivitiesForProgramInternal(
                     activity.subCategoryCode,
                     subCategoryLabels[activity.subCategoryCode] || activity.subCategoryCode,
                     10
-                  )
+                )
                 : parentCategoryId;
 
             // Generate unique code that includes facility type to prevent conflicts
             // Format: PROJECT_EXEC_FACILITY_CATEGORY_[SUBCATEGORY_]DISPLAY
-            const activityCode = activity.subCategoryCode 
+            const activityCode = activity.subCategoryCode
                 ? `${projectType}_EXEC_${facilityType.toUpperCase()}_${activity.categoryCode}_${activity.subCategoryCode}_${activity.displayOrder}`
                 : `${projectType}_EXEC_${facilityType.toUpperCase()}_${activity.categoryCode}_${activity.displayOrder}`;
 
@@ -580,13 +586,13 @@ export async function seedExecutionActivitiesForProgramInternal(
                 console.log(`     Attempting to insert ${activitiesToInsert.length} activities...`);
                 console.log(`     Sample activity code: ${activitiesToInsert[0].code}`);
                 console.log(`     Sample project type: ${activitiesToInsert[0].projectType}`);
-                
+
                 const result = await db
                     .insert(schema.dynamicActivities)
                     .values(activitiesToInsert as any)
                     .onConflictDoUpdate({
                         target: [
-                            schema.dynamicActivities.categoryId, 
+                            schema.dynamicActivities.categoryId,
                             schema.dynamicActivities.code
                         ],
                         set: {
@@ -606,7 +612,7 @@ export async function seedExecutionActivitiesForProgramInternal(
                         },
                     })
                     .returning();
-        
+
                 console.log(`     ✓ Successfully processed ${result.length} activities`);
                 totalInserted += result.length;
                 summary[facilityType] = result.length;
@@ -617,7 +623,7 @@ export async function seedExecutionActivitiesForProgramInternal(
                     code: error.code,
                     detail: error.detail
                 });
-                
+
                 // Log the first activity that failed
                 console.error(`     First activity in batch:`, JSON.stringify(activitiesToInsert[0], null, 2));
                 throw error;
@@ -626,81 +632,87 @@ export async function seedExecutionActivitiesForProgramInternal(
     }
 
     console.log(`\n✓ Total execution activities processed for ${projectType}: ${totalInserted}`);
-    
+
     // Verification step
     await verifyExecutionActivities(db, projectType);
-    
-    return { 
-        inserted: totalInserted, 
-        updated: totalUpdated, 
-        projectType 
+
+    return {
+        inserted: totalInserted,
+        updated: totalUpdated,
+        projectType
     };
 }
 
 // ENHANCED: Categories seeding with facility support
 export async function seedExecutionCategories(db: Database) {
     console.log('ENHANCED: Seeding execution categories with facility targeting...');
-    
+
     const facilityTypes: Array<'hospital' | 'health_center'> = ['hospital', 'health_center'];
     const programs = [
-        { type: 'HIV' as const, categories: [
-            { code: 'A', name: 'A. Receipts', displayOrder: 1 },
-            { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
-            { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
-            { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
-            { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
-            { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
-            { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
-        ]},
-        { type: 'MAL' as const, categories: [
-            { code: 'A', name: 'A. Receipts', displayOrder: 1 },
-            { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
-            { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
-            { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
-            { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
-            { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
-            { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
-        ]},
-        { type: 'TB' as const, categories: [
-            { code: 'A', name: 'A. Receipts', displayOrder: 1 },
-            { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
-            { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
-            { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
-            { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
-            { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
-            { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
-        ]}
+        {
+            type: 'HIV' as const, categories: [
+                { code: 'A', name: 'A. Receipts', displayOrder: 1 },
+                { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
+                { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
+                { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
+                { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
+                { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
+                { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
+            ]
+        },
+        {
+            type: 'MAL' as const, categories: [
+                { code: 'A', name: 'A. Receipts', displayOrder: 1 },
+                { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
+                { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
+                { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
+                { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
+                { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
+                { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
+            ]
+        },
+        {
+            type: 'TB' as const, categories: [
+                { code: 'A', name: 'A. Receipts', displayOrder: 1 },
+                { code: 'B', name: 'B. Expenditures', displayOrder: 2 },
+                { code: 'C', name: 'C. SURPLUS / DEFICIT', displayOrder: 3, isComputed: true },
+                { code: 'D', name: 'D. Financial Assets', displayOrder: 4 },
+                { code: 'E', name: 'E. Financial Liabilities', displayOrder: 5 },
+                { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
+                { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
+            ]
+        }
     ];
-    
+
     for (const program of programs) {
         for (const facilityType of facilityTypes) {
             await seedExecutionCategoriesForProgramAndFacility(
-                db, 
-                program.type, 
-                facilityType, 
+                db,
+                program.type,
+                facilityType,
                 program.categories
             );
         }
     }
-    
+
     console.log('ENHANCED: Finished seeding execution categories for all programs and facility types');
 }
 
 // ENHANCED: Main activities seeding function
 export async function seedExecutionActivities(db: Database) {
     console.log('ENHANCED: Seeding execution activities with facility targeting...');
-    
+
     await seedExecutionActivitiesForProgramInternal(db, 'HIV', hivActivities);
     await seedExecutionActivitiesForProgramInternal(db, 'MAL', malariaActivities);
     await seedExecutionActivitiesForProgramInternal(db, 'TB', tbActivities);
-    
+
     console.log('ENHANCED: Finished seeding execution activities for all programs');
 }
 
 // ENHANCED: Program-specific seeding functions
 export async function seedExecutionDataForProgram(db: Database, projectType: 'HIV' | 'MAL' | 'TB') {
     console.log(`ENHANCED: Seeding execution data for ${projectType} with facility targeting...`);
-    
+
     let activities: ActivityData[];
     const categories = [
         { code: 'A', name: 'A. Receipts', displayOrder: 1 },
@@ -711,7 +723,7 @@ export async function seedExecutionDataForProgram(db: Database, projectType: 'HI
         { code: 'F', name: 'F. Net Financial Assets', displayOrder: 6, isComputed: true },
         { code: 'G', name: 'G. Closing Balance', displayOrder: 7 },
     ];
-    
+
     switch (projectType) {
         case 'HIV':
             activities = hivActivities;
@@ -723,23 +735,23 @@ export async function seedExecutionDataForProgram(db: Database, projectType: 'HI
             activities = tbActivities;
             break;
     }
-    
+
     // Seed categories for both facility types
     const facilityTypes: Array<'hospital' | 'health_center'> = ['hospital', 'health_center'];
     for (const facilityType of facilityTypes) {
         await seedExecutionCategoriesForProgramAndFacility(db, projectType, facilityType, categories);
     }
-    
+
     // Seed activities (this will handle facility targeting internally)
     await seedExecutionActivitiesForProgramInternal(db, projectType, activities);
-    
+
     console.log(`ENHANCED: Finished seeding execution data for ${projectType} with facility targeting`);
 }
 
 // VALIDATION: Function to verify the enhancement worked correctly
 export async function validateExecutionActivitiesByFacility(db: Database) {
     console.log('VALIDATION: Checking execution activities by facility type...');
-    
+
     try {
         const results = await db.execute(`
             SELECT 
@@ -757,7 +769,7 @@ export async function validateExecutionActivitiesByFacility(db: Database) {
         console.log('VALIDATION RESULTS:');
         console.log('Project Type | Facility Type | Activities | Total Rows | Item Rows');
         console.log('-------------|---------------|------------|------------|----------');
-        
+
         for (const row of results as any[]) {
             console.log(`${row.project_type.padEnd(11)} | ${(row.facility_type || 'null').padEnd(13)} | ${String(row.activity_count).padEnd(10)} | ${String(row.total_rows).padEnd(10)} | ${String(row.item_rows)}`);
         }
@@ -782,7 +794,7 @@ export async function validateExecutionActivitiesByFacility(db: Database) {
         }
 
         return results;
-        
+
     } catch (error) {
         console.error('VALIDATION ERROR:', error);
         throw error;
@@ -813,12 +825,12 @@ export function buildExecutionActivitiesQuery(
 // Default export for compatibility with existing seeder structure
 export default async function seedExecutionData(db: Database) {
     console.log('ENHANCED: Starting execution data seeding with facility targeting...');
-    
+
     await seedExecutionCategories(db);
     await seedExecutionActivities(db);
-    
+
     // Run validation to ensure everything worked correctly
     await validateExecutionActivitiesByFacility(db);
-    
+
     console.log('ENHANCED: Execution data seeding completed with facility targeting verification');
 }

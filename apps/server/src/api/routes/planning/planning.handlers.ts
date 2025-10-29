@@ -35,6 +35,29 @@ import { auditService } from "@/lib/services/audit.service";
 import { notificationService } from "@/lib/services/notification.service";
 import { ApprovalError, ApprovalErrorFactory, isApprovalError } from "@/lib/errors/approval.errors";
 
+/**
+ * Helper function to calculate total budget from plan formData
+ * @param formData - The formData object containing activities with budgets
+ * @returns Total budget amount, or 0 if formData is missing or malformed
+ */
+function calculatePlanBudget(formData: any): number {
+  try {
+    if (!formData?.activities) {
+      console.warn('FormData missing activities field, returning budget as 0');
+      return 0;
+    }
+
+    const activities = Object.values(formData.activities);
+    const totalBudget = activities.reduce((sum: number, activity: any) => {
+      return sum + (activity?.total_budget || 0);
+    }, 0);
+
+    return totalBudget;
+  } catch (error) {
+    console.warn('Error calculating plan budget, returning 0:', error);
+    return 0;
+  }
+}
 
 export const list: AppRouteHandler<ListRoute> = async (c) => {
   try {
@@ -1938,8 +1961,14 @@ export const approvePlanning: AppRouteHandler<ApprovePlanningRoute> = async (c) 
       );
     }
 
-    // Log the approval action to audit trail
+    // Log the approval action to audit trail with budget metadata
     try {
+      // Fetch the plan to calculate budget
+      const plan = await db.query.schemaFormDataEntries.findFirst({
+        where: eq(schemaFormDataEntries.id, body.planningId)
+      });
+
+      const budgetAmount = plan ? calculatePlanBudget(plan.formData) : 0;
       const previousStatus = result.success ? 'PENDING' : 'UNKNOWN';
       const newStatus = body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
       
@@ -1948,7 +1977,8 @@ export const approvePlanning: AppRouteHandler<ApprovePlanningRoute> = async (c) 
         previousStatus as any,
         newStatus as any,
         userContext.userId,
-        body.comments
+        body.comments,
+        { budgetAmount }
       );
       
       logger?.info({
@@ -1956,8 +1986,9 @@ export const approvePlanning: AppRouteHandler<ApprovePlanningRoute> = async (c) 
         action: body.action,
         previousStatus,
         newStatus,
-        userId: userContext.userId
-      }, 'Audit log created for approval action');
+        userId: userContext.userId,
+        budgetAmount
+      }, 'Audit log created for approval action with budget metadata');
       
     } catch (auditError) {
       logger?.error({
@@ -2053,6 +2084,9 @@ export const reviewPlanning: AppRouteHandler<ReviewPlanningRoute> = async (c) =>
       );
     }
 
+    // Calculate budget amount before status change
+    const budgetAmount = calculatePlanBudget(planning.formData);
+
     // Update approval status
     const newStatus = body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
 
@@ -2066,6 +2100,21 @@ export const reviewPlanning: AppRouteHandler<ReviewPlanningRoute> = async (c) =>
         updatedAt: new Date(),
       })
       .where(eq(schemaFormDataEntries.id, body.planningId));
+
+    // Log to audit with budget metadata
+    try {
+      await auditService.logApprovalAction(
+        body.planningId,
+        planning.approvalStatus,
+        newStatus as any,
+        userContext.userId,
+        body.comments,
+        { budgetAmount }
+      );
+    } catch (auditError) {
+      console.error('Failed to log audit action:', auditError);
+      // Don't fail the request if audit logging fails
+    }
 
     const updated = await db.query.schemaFormDataEntries.findFirst({
       where: eq(schemaFormDataEntries.id, body.planningId),
@@ -2226,14 +2275,22 @@ export const bulkReviewPlanning: AppRouteHandler<BulkReviewPlanningRoute> = asyn
             }
 
             if (result.success) {
-              // Log audit action
+              // Log audit action with budget metadata
               try {
+                // Fetch the plan to calculate budget
+                const plan = await db.query.schemaFormDataEntries.findFirst({
+                  where: eq(schemaFormDataEntries.id, planningId)
+                });
+
+                const budgetAmount = plan ? calculatePlanBudget(plan.formData) : 0;
+
                 await auditService.logApprovalAction(
                   planningId,
                   'PENDING' as any,
                   (body.action === 'APPROVE' ? 'APPROVED' : 'REJECTED') as any,
                   userContext.userId,
-                  body.comments
+                  body.comments,
+                  { budgetAmount }
                 );
               } catch (auditError) {
                 console.error('Failed to log audit action for bulk operation:', auditError);
