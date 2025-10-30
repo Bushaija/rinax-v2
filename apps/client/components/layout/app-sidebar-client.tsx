@@ -64,7 +64,7 @@ export function AppSidebarClient({ navItems, user }: AppSidebarClientProps) {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="sticky top-0 z-10 bg-sidebar border-b">
         <div className="flex gap-2 py-2 text-sidebar-accent-foreground">
           <div className="flex aspect-square size-8 items-center justify-center rounded-lg text-sidebar-primary-foreground">
             <company.logo className="size-4" />
@@ -135,7 +135,7 @@ export function AppSidebarClient({ navItems, user }: AppSidebarClientProps) {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="sticky bottom-0 z-10 bg-sidebar border-t">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -194,14 +194,6 @@ export function AppSidebarClient({ navItems, user }: AppSidebarClientProps) {
                 <DropdownMenuSeparator />
 
                 <DropdownMenuGroup>
-                  <DropdownMenuItem>
-                    <BadgeCheck />
-                    Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <CreditCard />
-                    Billing
-                  </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Bell />
                     Notifications

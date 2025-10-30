@@ -6,6 +6,9 @@ import { eq } from "drizzle-orm";
 import type { ReportStatus, WorkflowAction, WorkflowLogWithActor } from "./financial-reports.types";
 import { pdfGenerationService } from "./pdf-generation.service";
 import { notificationService } from "./notification.service";
+import { SnapshotService } from "@/lib/services/snapshot-service";
+import { VersionService } from "@/lib/services/version-service";
+import { PeriodLockService } from "@/lib/services/period-lock-service";
 
 export interface WorkflowValidationResult {
   allowed: boolean;
@@ -164,7 +167,9 @@ export class FinancialReportWorkflowService {
 
   /**
    * Submits a report for DAF approval
-   * Requirements: 1.1-1.5
+   * Requirements: 1.1-1.5, 6.1
+   * 
+   * Enhanced to capture snapshot, compute checksum, create version, and lock period
    */
   async submitForApproval(reportId: number, userId: number): Promise<WorkflowActionResult> {
     // Validate action is allowed
@@ -173,11 +178,39 @@ export class FinancialReportWorkflowService {
       throw new Error(validation.reason || 'Cannot submit report');
     }
 
-    // Update report status and lock it
+    // Get the full report with relations for snapshot capture
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+      with: {
+        project: true,
+        facility: true,
+        reportingPeriod: true
+      }
+    });
+
+    if (!report) {
+      throw new Error('Report not found');
+    }
+
+    // Initialize services
+    const snapshotService = new SnapshotService();
+    const versionService = new VersionService();
+    const periodLockService = new PeriodLockService();
+
+    // 1. Capture snapshot of all planning and execution data
+    const snapshot = await snapshotService.captureSnapshot(report);
+
+    // 2. Compute checksum for integrity validation
+    const checksum = snapshotService.computeChecksum(snapshot);
+
+    // 3. Update report with snapshot data, checksum, and timestamp
     const updatedReports = await db.update(financialReports)
       .set({
         status: 'pending_daf_approval',
         locked: true,
+        reportData: snapshot,
+        snapshotChecksum: checksum,
+        snapshotTimestamp: new Date(),
         submittedBy: userId,
         submittedAt: new Date(),
         updatedBy: userId,
@@ -190,15 +223,34 @@ export class FinancialReportWorkflowService {
       throw new Error('Failed to update report status');
     }
 
-    // Log the action
+    // 4. Create initial version "1.0"
+    await versionService.createVersion(
+      reportId,
+      "1.0",
+      snapshot,
+      checksum,
+      userId,
+      "Initial submission for approval"
+    );
+
+    // 5. Lock the reporting period to prevent back-dating
+    await periodLockService.lockPeriod(
+      report.reportingPeriodId,
+      report.projectId,
+      report.facilityId,
+      userId,
+      "Report submitted for approval"
+    );
+
+    // 6. Log the action
     await this.logAction(reportId, 'submitted', userId);
 
-    // Notify DAF users (Requirement 1.4)
+    // 7. Notify DAF users (Requirement 1.4)
     await notificationService.notifyDafUsers(reportId, updatedReports[0].title);
 
     return {
       success: true,
-      message: 'Report submitted for DAF approval',
+      message: 'Report submitted for DAF approval with snapshot captured',
       report: updatedReports[0]
     };
   }

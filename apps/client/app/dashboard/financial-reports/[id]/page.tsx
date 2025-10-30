@@ -9,6 +9,11 @@ import { AlertCircle, Lock, ArrowLeft, Edit } from "lucide-react";
 import { useGetFinancialReportById } from "@/hooks/queries/financial-reports";
 import { ApprovalStatusBadge } from "@/components/financial-reports";
 import type { ReportStatus } from "@/types/financial-reports-approval";
+import { SnapshotIndicator } from "@/components/reports/snapshot-indicator";
+import { PeriodLockBadge } from "@/components/reports/period-lock-badge";
+import { VersionHistory } from "@/components/reports/version-history";
+import { useReportVersions } from "@/hooks/queries/financial-reports/use-report-versions";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function ViewFinancialReportPage() {
   const params = useParams();
@@ -16,6 +21,7 @@ export default function ViewFinancialReportPage() {
   const reportId = parseInt(params.id as string);
 
   const { data: report, isLoading, error } = useGetFinancialReportById(reportId);
+  const { data: versionsData } = useReportVersions(reportId);
 
   if (isLoading) {
     return (
@@ -41,45 +47,72 @@ export default function ViewFinancialReportPage() {
 
   const isLocked = report.locked;
   const status = report.status as ReportStatus;
+  
+  // Determine if we should use snapshot or live data based on report status
+  // Draft reports use live data, submitted/approved reports use snapshot data
+  const useSnapshot = status !== 'draft';
+  
+  // Check if there are multiple versions
+  const hasMultipleVersions = (versionsData?.versions?.length || 0) > 1;
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/dashboard/financial-reports")}
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <h1 className="text-2xl font-bold">View Financial Report</h1>
-          </div>
-          <p className="text-muted-foreground">
-            Report Code: {report.reportCode}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ApprovalStatusBadge status={status} />
-          {isLocked && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Lock className="h-4 w-4" />
-              <span className="text-sm">Locked</span>
+    <TooltipProvider>
+      <div className="container mx-auto py-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/dashboard/financial-reports")}
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+              <h1 className="text-2xl font-bold">View Financial Report</h1>
             </div>
-          )}
-          {!isLocked && (
-            <Button
-              onClick={() => router.push(`/dashboard/financial-reports/${reportId}/edit`)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
+            <p className="text-muted-foreground">
+              Report Code: {report.reportCode}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <ApprovalStatusBadge status={status} />
+            {isLocked && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Lock className="h-4 w-4" />
+                <span className="text-sm">Locked</span>
+              </div>
+            )}
+            {!isLocked && (
+              <Button
+                onClick={() => router.push(`/dashboard/financial-reports/${reportId}/edit`)}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Snapshot Indicator - Shows whether report displays live or snapshot data */}
+        <div className="flex items-center gap-3">
+          <SnapshotIndicator
+            isSnapshot={useSnapshot}
+            snapshotTimestamp={report.snapshotTimestamp}
+            isOutdated={report.isOutdated}
+          />
+          
+          {/* Period Lock Badge - Shows if the reporting period is locked */}
+          {report.periodLock && (
+            <PeriodLockBadge
+              isLocked={report.periodLock.isLocked}
+              lockedAt={report.periodLock.lockedAt}
+              lockedBy={report.periodLock.lockedBy?.name}
+              lockedReason={report.periodLock.lockedReason}
+            />
           )}
         </div>
-      </div>
 
       {/* Lock Status */}
       {isLocked && (
@@ -166,6 +199,22 @@ export default function ViewFinancialReportPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+
+      {/* Version History - Shows if multiple versions exist */}
+      {hasMultipleVersions && (
+        <VersionHistory
+          reportId={reportId}
+          onViewVersion={(versionNumber) => {
+            // TODO: Implement version viewing functionality
+            console.log("View version:", versionNumber);
+          }}
+          onCompareVersion={(versionNumber) => {
+            // TODO: Implement version comparison navigation
+            console.log("Compare version:", versionNumber);
+          }}
+        />
+      )}
+      </div>
+    </TooltipProvider>
   );
 }

@@ -32,6 +32,11 @@ export const financialReports = pgTable("financial_reports", {
     metadata: jsonb("metadata"), // Report metadata (submitter, approver, etc.)
     computedTotals: jsonb("computed_totals"), // Auto-calculated totals
     validationResults: jsonb("validation_results"), // Validation status
+    // Snapshot fields
+    snapshotChecksum: varchar("snapshot_checksum", { length: 64 }),
+    snapshotTimestamp: timestamp("snapshot_timestamp", { mode: 'date' }),
+    sourceDataVersion: varchar("source_data_version", { length: 20 }),
+    isOutdated: boolean("is_outdated").default(false),
     // Audit trail
     createdBy: integer("created_by"),
     createdAt: timestamp("created_at", { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`),

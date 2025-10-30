@@ -17,6 +17,11 @@ import {
   systemConfigurations,
   configurationAuditLog,
   approvalAuditLog,
+  
+  // Snapshot and period locking tables
+  reportVersions,
+  periodLocks,
+  periodLockAuditLog,
 
   // Existing tables (referenced)
   facilities,
@@ -69,6 +74,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   auditLogs: many(configurationAuditLog),
   approvalActions: many(approvalAuditLog, { relationName: "approval_action_by" }),
   reviewedPlans: many(schemaFormDataEntries, { relationName: "plan_reviewer" }),
+  createdVersions: many(reportVersions, { relationName: "version_creator" }),
+  lockedPeriods: many(periodLocks, { relationName: "period_lock_locker" }),
+  unlockedPeriods: many(periodLocks, { relationName: "period_lock_unlocker" }),
+  periodLockAudits: many(periodLockAuditLog, { relationName: "audit_performer" }),
 }));
 
 // === SCHEMA-DRIVEN RELATIONS ===
@@ -194,6 +203,7 @@ export const financialReportsRelations = relations(financialReports, ({ one, man
     relationName: "report_dg_approver"
   }),
   workflowLogs: many(financialReportWorkflowLogs, { relationName: "report_workflow_history" }),
+  versions: many(reportVersions, { relationName: "report_versions" }),
 }));
 
 export const schemaFormDataEntriesRelations = relations(schemaFormDataEntries, ({ one, many }) => ({
@@ -330,5 +340,59 @@ export const financialReportWorkflowLogsRelations = relations(financialReportWor
     fields: [financialReportWorkflowLogs.actorId],
     references: [users.id],
     relationName: "workflow_actor"
+  }),
+}));
+
+// === SNAPSHOT AND PERIOD LOCKING RELATIONS ===
+
+export const reportVersionsRelations = relations(reportVersions, ({ one }) => ({
+  report: one(financialReports, {
+    fields: [reportVersions.reportId],
+    references: [financialReports.id],
+    relationName: "report_versions"
+  }),
+  creator: one(users, {
+    fields: [reportVersions.createdBy],
+    references: [users.id],
+    relationName: "version_creator"
+  }),
+}));
+
+export const periodLocksRelations = relations(periodLocks, ({ one, many }) => ({
+  reportingPeriod: one(reportingPeriods, {
+    fields: [periodLocks.reportingPeriodId],
+    references: [reportingPeriods.id]
+  }),
+  project: one(projects, {
+    fields: [periodLocks.projectId],
+    references: [projects.id]
+  }),
+  facility: one(facilities, {
+    fields: [periodLocks.facilityId],
+    references: [facilities.id]
+  }),
+  lockedByUser: one(users, {
+    fields: [periodLocks.lockedBy],
+    references: [users.id],
+    relationName: "period_lock_locker"
+  }),
+  unlockedByUser: one(users, {
+    fields: [periodLocks.unlockedBy],
+    references: [users.id],
+    relationName: "period_lock_unlocker"
+  }),
+  auditLogs: many(periodLockAuditLog, { relationName: "period_lock_audit_history" }),
+}));
+
+export const periodLockAuditLogRelations = relations(periodLockAuditLog, ({ one }) => ({
+  periodLock: one(periodLocks, {
+    fields: [periodLockAuditLog.periodLockId],
+    references: [periodLocks.id],
+    relationName: "period_lock_audit_history"
+  }),
+  performer: one(users, {
+    fields: [periodLockAuditLog.performedBy],
+    references: [users.id],
+    relationName: "audit_performer"
   }),
 }));

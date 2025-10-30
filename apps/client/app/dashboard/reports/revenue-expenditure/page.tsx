@@ -9,6 +9,8 @@ import { getCurrentFiscalYear } from '@/features/execution/utils';
 import useGenerateStatement from '@/hooks/mutations/financial-reports/use-generate-statement';
 import { useToast } from '@/hooks/use-toast';
 import { transformStatementData } from '../utils/transform-statement-data';
+import { FinancialReportStatusCard } from '@/components/reports/financial-report-status-card';
+import { useGetReportId } from '@/hooks/queries/financial-reports';
 
 // Project configuration
 const projectTabs: FilterTab[] = [
@@ -39,7 +41,13 @@ const getProjectDisplayName = (tabValue: string): string => {
 }
 
 // Tab Content Component that handles loading state
-const TabContent = ({ tabValue, periodId }: { tabValue: string; periodId: number }) => {
+const TabContent = ({
+  tabValue,
+  periodId
+}: {
+  tabValue: string;
+  periodId: number;
+}) => {
   const [statementData, setStatementData] = useState<any>(null);
   const { mutate: generateStatement, isPending, isError } = useGenerateStatement();
   const { toast } = useToast();
@@ -48,6 +56,19 @@ const TabContent = ({ tabValue, periodId }: { tabValue: string; periodId: number
     'hiv': 'HIV',
     'malaria': 'Malaria',
     'tb': 'TB'
+  };
+
+  // Fetch the report ID for this project and period
+  const { data: reportId, refetch: refetchReportId } = useGetReportId({
+    reportingPeriodId: periodId,
+    projectType: projectTypeMapping[tabValue],
+    statementType: "revenue-expenditure",
+    enabled: !!periodId,
+  });
+
+  // Handle report creation - refetch the report ID
+  const handleReportCreated = () => {
+    refetchReportId();
   };
 
   useEffect(() => {
@@ -96,7 +117,22 @@ const TabContent = ({ tabValue, periodId }: { tabValue: string; periodId: number
   // Transform API data to component format
   const transformedData = transformStatementData(statementData.lines ?? []);
 
-  return <RevenueExpenditureStatement initialData={transformedData} {...periodLabels} />
+  return (
+    <div className="flex gap-4">
+      <div>
+        <RevenueExpenditureStatement initialData={transformedData} {...periodLabels} />
+      </div>
+      <div className="w-80">
+        <FinancialReportStatusCard
+          reportId={reportId ?? null}
+          projectType={projectTypeMapping[tabValue]}
+          statementType="revenue-expenditure"
+          reportingPeriodId={periodId}
+          onReportCreated={handleReportCreated}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function RevenueExpenditurePage() {
@@ -110,14 +146,19 @@ export default function RevenueExpenditurePage() {
   // Create tabs with content that handles its own loading state
   const tabsWithContent = projectTabs.map(tab => ({
     ...tab,
-    content: <TabContent tabValue={tab.value} periodId={periodId} />
+    content: (
+      <TabContent
+        tabValue={tab.value}
+        periodId={periodId}
+      />
+    )
   }))
 
   return (
-    <main className="max-w-6xl mx-auto">
-      <div className="">
+    <main className="flex justify-center rounded-lg bg-[#f2f2f2]">
+      <div className="p-2">
         {/* 1. Financial Statement Header - Always visible */}
-        <div ref={reportContentRef} className="bg-white">
+        <div ref={reportContentRef} className="max-w-[1230px]">
           <FinancialStatementHeader
             statementType="revenue-expenditure"
             selectedProject={selectedTab as 'hiv' | 'malaria' | 'tb'}

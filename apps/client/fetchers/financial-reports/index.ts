@@ -11,3 +11,7 @@ export * from "./daf-reject";
 export * from "./dg-approve";
 export * from "./dg-reject";
 export * from "./get-workflow-logs";
+
+// Version Control Fetchers
+export * from "./get-report-versions";
+export * from "./compare-versions";

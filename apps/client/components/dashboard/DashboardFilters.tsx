@@ -62,7 +62,7 @@ export function DashboardFilters({
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+      <div className="flex gap-2">
         {/* Province filter - only show on Province tab */}
         {activeTab === "province" && provinces.length > 0 && (
           <div className="w-full sm:w-[200px]">
@@ -87,7 +87,7 @@ export function DashboardFilters({
 
         {/* District filter - only show on District tab */}
         {activeTab === "district" && districts.length > 0 && (
-          <div className="w-full sm:w-[200px]">
+          <div className="w-full">
             <Select
               value={districtId || ""}
               onValueChange={onDistrictChange}
@@ -109,7 +109,7 @@ export function DashboardFilters({
 
         {/* Program filter - show on both tabs */}
         {programs.length > 0 && (
-          <div className="w-full sm:w-[200px]">
+          <div className="w-full">
             <Select value={programId || ""} onValueChange={onProgramChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select program" />
@@ -126,7 +126,7 @@ export function DashboardFilters({
         )}
 
         {/* Quarter filter - show on both tabs */}
-        <div className="w-full sm:w-[150px]">
+        {/* <div className="w-full sm:w-[150px]">
           <Select value={quarter || ""} onValueChange={onQuarterChange}>
             <SelectTrigger>
               <SelectValue placeholder="Select quarter" />
@@ -138,7 +138,7 @@ export function DashboardFilters({
               <SelectItem value="4">Q4</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </div> */}
       </div>
 
       {/* Clear filters button */}

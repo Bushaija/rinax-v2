@@ -172,6 +172,17 @@ export interface FinancialStatementResponse {
   performance: PerformanceMetrics;
   aggregationMetadata?: any; // NEW: Aggregation metadata for facility-level statements
   facilityBreakdown?: any[]; // NEW: Optional facility breakdown for aggregated statements
+  snapshotMetadata?: SnapshotMetadata; // Task 10: Snapshot metadata for display logic (Requirements: 3.4, 3.5)
+}
+
+// Task 10: Snapshot metadata interface (Requirements: 3.4, 3.5)
+export interface SnapshotMetadata {
+  isSnapshot: boolean; // True if displaying snapshot data, false if live data
+  snapshotTimestamp: string | null; // ISO timestamp when snapshot was captured
+  isOutdated: boolean; // True if source data has changed since snapshot
+  reportId: number | null; // Associated report ID if applicable
+  reportStatus?: string; // Report status (for snapshot data)
+  version?: string; // Report version (for snapshot data)
 }
 
 export interface StatementInfo {

@@ -31,10 +31,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updatePlanning } from "@/fetchers/planning/update-planning";
 import type { UpdatePlanningDataRequest } from "@/fetchers/planning/types";
 import { toast } from "sonner";
+import { checkPeriodLockError } from "@/lib/period-lock-error";
 
 interface UseUpdatePlanningParams {
   onSuccess?: (data: any) => void;
   onError?: (error: Error) => void;
+  onPeriodLockError?: (error: any) => void;
 }
 
 export function useUpdatePlanning(params?: UseUpdatePlanningParams) {
@@ -57,7 +59,27 @@ export function useUpdatePlanning(params?: UseUpdatePlanningParams) {
       params?.onSuccess?.(data);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update planning data");
+      // Check if this is a period lock error
+      const lockError = checkPeriodLockError(error);
+      
+      if (lockError.isPeriodLockError) {
+        // Call custom period lock error handler if provided
+        if (params?.onPeriodLockError) {
+          params.onPeriodLockError(error);
+        } else {
+          // Default: show toast with period lock message
+          toast.error("Period Locked", {
+            description: "This reporting period is locked. Contact an administrator to unlock.",
+          });
+        }
+      } else {
+        // Handle other errors
+        toast.error("Failed to update planning data", {
+          description: error.message || "An unexpected error occurred",
+        });
+      }
+      
+      // Call custom error handler if provided
       params?.onError?.(error);
     },
   });

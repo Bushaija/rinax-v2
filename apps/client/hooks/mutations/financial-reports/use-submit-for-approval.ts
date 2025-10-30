@@ -1,17 +1,41 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { submitForApproval } from "@/fetchers/financial-reports/submit-for-approval";
+import { 
+  submitForApproval, 
+  type SubmitForApprovalResponse 
+} from "@/fetchers/financial-reports/submit-for-approval";
 
-function useSubmitForApproval() {
+interface UseSubmitForApprovalOptions {
+  onSuccess?: (data: SubmitForApprovalResponse) => void;
+  onError?: (error: Error) => void;
+}
+
+export function useSubmitForApproval(options?: UseSubmitForApprovalOptions) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  const mutation = useMutation<SubmitForApprovalResponse, Error, number>({
     mutationFn: submitForApproval,
-    onSuccess: () => {
-      // Invalidate financial reports list to refetch
+    onSuccess: (data, reportId) => {
+      // Invalidate financial report queries to refetch
       queryClient.invalidateQueries({ queryKey: ["financial-reports", "list"] });
       queryClient.invalidateQueries({ queryKey: ["financial-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["financial-report-metadata", reportId] });
+      
+      // Call user-provided onSuccess callback
+      options?.onSuccess?.(data);
+    },
+    onError: (error) => {
+      // Call user-provided onError callback
+      options?.onError?.(error);
     },
   });
+
+  return {
+    submit: mutation.mutate,
+    isSubmitting: mutation.isPending,
+    isSuccess: mutation.isSuccess,
+    isError: mutation.isError,
+    error: mutation.error,
+  };
 }
 
 export default useSubmitForApproval;

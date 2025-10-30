@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { honoClient as client } from "@/api-client/index";
 
 export interface UpdateFinancialReportData {
   title?: string;
@@ -14,9 +14,16 @@ export async function updateFinancialReport(
   reportId: number,
   data: UpdateFinancialReportData
 ) {
-  const response = await apiClient.patch(
-    `/financial-reports/${reportId}`,
-    data
-  );
-  return response.data;
+  const response = await (client as any)["financial-reports"][":id"].$patch({
+    param: { id: reportId.toString() },
+    json: data,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  const result = await response.json();
+  return result;
 }

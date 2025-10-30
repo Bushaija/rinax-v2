@@ -16,4 +16,7 @@ export function expandAllNodes(data: FinancialRow[]): Set<string> {
   
   collectIds(data)
   return result
-} 
+}
+
+// Re-export date formatting utilities
+export { formatDate, formatDateWithFns } from "@/lib/format" 

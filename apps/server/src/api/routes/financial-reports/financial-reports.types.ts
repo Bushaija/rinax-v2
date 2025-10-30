@@ -124,16 +124,16 @@ export const financialReportWithRelationsSchema = selectFinancialReportSchema.ex
 
 // Request/Response schemas
 export const financialReportListRequestSchema = z.object({
-  projectId: z.number().int().optional(),
-  facilityId: z.number().int().optional(),
+  projectId: z.coerce.number().int().optional(),
+  facilityId: z.coerce.number().int().optional(),
   fiscalYear: z.string().optional(),
   reportType: reportTypeEnum.optional(),
   status: reportStatusEnum.optional(),
-  createdBy: z.number().int().optional(),
+  createdBy: z.coerce.number().int().optional(),
   fromDate: z.string().optional(),
   toDate: z.string().optional(),
-  page: z.number().int().default(1),
-  limit: z.number().int().default(20),
+  page: z.coerce.number().int().default(1),
+  limit: z.coerce.number().int().default(20),
 });
 
 export const financialReportListResponseSchema = z.object({
@@ -270,6 +270,11 @@ export const generateStatementRequestSchema = z.object({
   
   includeComparatives: z.boolean().default(true),
   customMappings: z.record(z.string(), z.any()).optional(),
+  
+  // NEW: Optional report ID for snapshot-based display (Task 10)
+  reportId: z.number().int().positive()
+    .optional()
+    .describe('Financial report ID - if provided and report is submitted/approved, returns snapshot data'),
 });
 
 // Standard statement line schema (for existing statements)
@@ -466,6 +471,16 @@ export const facilityBreakdownItemSchema = z.object({
   isFavorable: z.boolean(),
 });
 
+// Task 10: Snapshot metadata schema (Requirements: 3.4, 3.5)
+export const snapshotMetadataSchema = z.object({
+  isSnapshot: z.boolean().describe('True if displaying snapshot data, false if live data'),
+  snapshotTimestamp: z.string().nullable().describe('ISO timestamp when snapshot was captured'),
+  isOutdated: z.boolean().describe('True if source data has changed since snapshot'),
+  reportId: z.number().nullable().describe('Associated report ID if applicable'),
+  reportStatus: z.string().optional().describe('Report status (for snapshot data)'),
+  version: z.string().optional().describe('Report version (for snapshot data)'),
+});
+
 // Statement generation response schema with union types for backward compatibility
 export const generateStatementResponseSchema = z.object({
   statement: z.union([
@@ -538,6 +553,9 @@ export const generateStatementResponseSchema = z.object({
   
   // NEW: Optional facility breakdown
   facilityBreakdown: z.array(facilityBreakdownItemSchema).optional(),
+  
+  // Task 10: Snapshot metadata (Requirements: 3.4, 3.5)
+  snapshotMetadata: snapshotMetadataSchema.optional(),
 });
 
 // ============================================================================
@@ -702,6 +720,186 @@ export type InsertWorkflowLog = z.infer<typeof insertWorkflowLogSchema>;
 export type ApprovalActionRequest = z.infer<typeof approvalActionRequestSchema>;
 export type RejectionActionRequest = z.infer<typeof rejectionActionRequestSchema>;
 export type ApprovalActionResponse = z.infer<typeof approvalActionResponseSchema>;
+
+// ============================================================================
+// PERIOD LOCK SCHEMAS
+// ============================================================================
+
+export const periodLockSchema = z.object({
+  id: z.number().int(),
+  reportingPeriodId: z.number().int(),
+  projectId: z.number().int(),
+  facilityId: z.number().int(),
+  isLocked: z.boolean(),
+  lockedBy: z.number().int().nullable(),
+  lockedAt: z.string().nullable(),
+  lockedReason: z.string().nullable(),
+  unlockedBy: z.number().int().nullable(),
+  unlockedAt: z.string().nullable(),
+  unlockedReason: z.string().nullable(),
+});
+
+export const periodLockWithRelationsSchema = periodLockSchema.extend({
+  reportingPeriod: z.object({
+    id: z.number(),
+    year: z.number(),
+    periodType: z.string(),
+    startDate: z.string(),
+    endDate: z.string(),
+  }).optional(),
+  project: z.object({
+    id: z.number(),
+    name: z.string(),
+    code: z.string(),
+    projectType: z.string().nullable(),
+  }).optional(),
+  facility: z.object({
+    id: z.number(),
+    name: z.string(),
+    facilityType: z.string(),
+  }).optional(),
+  lockedByUser: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+  unlockedByUser: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+});
+
+export const periodLockAuditLogSchema = z.object({
+  id: z.number().int(),
+  periodLockId: z.number().int(),
+  action: z.enum(['LOCKED', 'UNLOCKED', 'EDIT_ATTEMPTED']),
+  performedBy: z.number().int(),
+  performedAt: z.string(),
+  reason: z.string().nullable(),
+  metadata: z.record(z.string(), z.any()).nullable(),
+});
+
+export const periodLockAuditLogWithActorSchema = periodLockAuditLogSchema.extend({
+  performer: z.object({
+    id: z.number(),
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+});
+
+// Request/Response schemas for period lock endpoints
+export const getPeriodLocksRequestSchema = z.object({
+  facilityId: z.coerce.number().int().positive(),
+});
+
+export const getPeriodLocksResponseSchema = z.object({
+  locks: z.array(periodLockWithRelationsSchema),
+});
+
+export const unlockPeriodRequestSchema = z.object({
+  reason: z.string().min(1, 'Unlock reason is required'),
+});
+
+export const unlockPeriodResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  periodLock: periodLockWithRelationsSchema,
+});
+
+export const getPeriodLockAuditRequestSchema = z.object({
+  // No query params needed, uses route param
+});
+
+export const getPeriodLockAuditResponseSchema = z.object({
+  auditLogs: z.array(periodLockAuditLogWithActorSchema),
+});
+
+// ============================================================================
+// PERIOD LOCK TYPE DEFINITIONS
+// ============================================================================
+
+export type PeriodLock = z.infer<typeof periodLockSchema>;
+export type PeriodLockWithRelations = z.infer<typeof periodLockWithRelationsSchema>;
+export type PeriodLockAuditLog = z.infer<typeof periodLockAuditLogSchema>;
+export type PeriodLockAuditLogWithActor = z.infer<typeof periodLockAuditLogWithActorSchema>;
+export type GetPeriodLocksRequest = z.infer<typeof getPeriodLocksRequestSchema>;
+export type GetPeriodLocksResponse = z.infer<typeof getPeriodLocksResponseSchema>;
+export type UnlockPeriodRequest = z.infer<typeof unlockPeriodRequestSchema>;
+export type UnlockPeriodResponse = z.infer<typeof unlockPeriodResponseSchema>;
+export type GetPeriodLockAuditResponse = z.infer<typeof getPeriodLockAuditResponseSchema>;
+
+// ============================================================================
+// VERSION CONTROL SCHEMAS
+// ============================================================================
+
+export const reportVersionSchema = z.object({
+  id: z.number().int(),
+  reportId: z.number().int(),
+  versionNumber: z.string(),
+  snapshotData: z.record(z.string(), z.any()),
+  snapshotChecksum: z.string(),
+  snapshotTimestamp: z.string(),
+  createdBy: z.number().int().nullable(),
+  createdAt: z.string().nullable(),
+  changesSummary: z.string().nullable(),
+});
+
+export const reportVersionWithCreatorSchema = reportVersionSchema.extend({
+  creator: z.object({
+    id: z.number(),
+    name: z.string().nullable(),
+    email: z.string().nullable(),
+  }).optional(),
+});
+
+export const versionDifferenceSchema = z.object({
+  lineCode: z.string(),
+  lineName: z.string(),
+  field: z.string(),
+  version1Value: z.number(),
+  version2Value: z.number(),
+  difference: z.number(),
+  percentageChange: z.number(),
+});
+
+// Request/Response schemas for version control endpoints
+export const getVersionsResponseSchema = z.object({
+  reportId: z.number().int(),
+  currentVersion: z.string(),
+  versions: z.array(reportVersionWithCreatorSchema),
+});
+
+export const getVersionResponseSchema = z.object({
+  version: reportVersionWithCreatorSchema,
+});
+
+export const compareVersionsRequestSchema = z.object({
+  version1: z.string().min(1, 'Version 1 is required'),
+  version2: z.string().min(1, 'Version 2 is required'),
+});
+
+export const compareVersionsResponseSchema = z.object({
+  version1: z.string(),
+  version2: z.string(),
+  differences: z.array(versionDifferenceSchema),
+  summary: z.object({
+    totalDifferences: z.number().int(),
+    significantChanges: z.number().int(),
+  }),
+});
+
+// ============================================================================
+// VERSION CONTROL TYPE DEFINITIONS
+// ============================================================================
+
+export type ReportVersion = z.infer<typeof reportVersionSchema>;
+export type ReportVersionWithCreator = z.infer<typeof reportVersionWithCreatorSchema>;
+export type VersionDifference = z.infer<typeof versionDifferenceSchema>;
+export type GetVersionsResponse = z.infer<typeof getVersionsResponseSchema>;
+export type GetVersionResponse = z.infer<typeof getVersionResponseSchema>;
+export type CompareVersionsRequest = z.infer<typeof compareVersionsRequestSchema>;
+export type CompareVersionsResponse = z.infer<typeof compareVersionsResponseSchema>;
 
 // ============================================================================
 // BASE TYPE DEFINITIONS

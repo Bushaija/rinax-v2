@@ -21,15 +21,15 @@ interface FilterTabsProps {
   tabContentClassName?: string
 }
 
-  // Helper function to map project codes to tab values
-  export const getProjectCodeForTab = (tabValue: string): string => {
-    const mapping = {
-      'hiv': 'HIV',
-      'malaria': 'MAL', 
-      'tb': 'TB'
-    }
-    return mapping[tabValue as keyof typeof mapping] || tabValue.toUpperCase()
+// Helper function to map project codes to tab values
+export const getProjectCodeForTab = (tabValue: string): string => {
+  const mapping = {
+    'hiv': 'HIV',
+    'malaria': 'MAL',
+    'tb': 'TB'
   }
+  return mapping[tabValue as keyof typeof mapping] || tabValue.toUpperCase()
+}
 
 export function FilterTabs({
   tabs,
@@ -39,29 +39,23 @@ export function FilterTabs({
   className = "w-full",
   tabsListClassName,
   tabTriggerClassName,
-  tabContentClassName = "mt-0"
+  tabContentClassName
 }: FilterTabsProps) {
-  
+
   return (
-    <Tabs 
-      defaultValue={defaultValue || tabs[0]?.value} 
-      value={value} 
-      onValueChange={onValueChange} 
+    <Tabs
+      defaultValue={defaultValue || tabs[0]?.value}
+      value={value}
+      onValueChange={onValueChange}
       className={className}
     >
-      {/* Excel-style tab list */}
-      <TabsList className={cn(
-        "h-auto w-full justify-start rounded-none bg-transparent p-0 border-b border-gray-200 w-[250px]",
-        tabsListClassName
-      )}>
+      {/* shadcn default tab list */}
+      <TabsList className={cn(tabsListClassName)}>
         {tabs.map((tab) => (
-          <TabsTrigger 
-            key={tab.value} 
-            value={tab.value} 
-            className={cn(
-              "relative border-b-2 rounded-none bg-transparent px-4 py-3 text-sm font-medium text-gray-500 shadow-none transition-all hover:bg-gray-50 hover:text-gray-900 focus-visible:ring-0 data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-none",
-              tabTriggerClassName
-            )}
+          <TabsTrigger
+            key={tab.value}
+            value={tab.value}
+            className={cn(tabTriggerClassName)}
           >
             {tab.label}
           </TabsTrigger>
@@ -70,14 +64,14 @@ export function FilterTabs({
 
       {/* Tab content */}
       {tabs.map((tab) => (
-        <TabsContent 
-          key={tab.value} 
-          value={tab.value} 
-          className={cn("ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", tabContentClassName)}
+        <TabsContent
+          key={tab.value}
+          value={tab.value}
+          className={cn(tabContentClassName)}
         >
           {tab.content}
         </TabsContent>
       ))}
     </Tabs>
   )
-} 
+}

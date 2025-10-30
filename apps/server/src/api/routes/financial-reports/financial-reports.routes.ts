@@ -15,7 +15,20 @@ import {
   approvalActionResponseSchema,
   workflowLogsResponseSchema,
   patchFinancialReportSchema,
+  getPeriodLocksRequestSchema,
+  getPeriodLocksResponseSchema,
+  unlockPeriodRequestSchema,
+  unlockPeriodResponseSchema,
+  getPeriodLockAuditResponseSchema,
+  getVersionsResponseSchema,
+  getVersionResponseSchema,
+  compareVersionsRequestSchema,
+  compareVersionsResponseSchema,
 } from "./financial-reports.types";
+import {
+  createReportFromStatementRequestSchema,
+  createReportFromStatementResponseSchema,
+} from "./create-report-from-statement.types";
 import { notFoundSchema } from "@/api/lib/constants";
 
 const tags = ["financial-reports"];
@@ -143,6 +156,54 @@ export const generateStatement = createRoute({
         error: z.string().optional(),
       }),
       "Statement generation failed"
+    ),
+  },
+});
+
+export const createReportFromStatement = createRoute({
+  path: "/financial-reports/create-report",
+  method: "post",
+  tags,
+  summary: "Create a formal financial report from generated statement data",
+  description: "Creates a financial_reports record from a generated statement, enabling approval workflow tracking. This separates 'viewing data' from 'creating a formal report for approval'.",
+  request: {
+    body: jsonContent(
+      createReportFromStatementRequestSchema,
+      "Parameters to generate and save the statement as a formal report"
+    ),
+  },
+  responses: {
+    [HttpStatusCodes.CREATED]: jsonContent(
+      createReportFromStatementResponseSchema,
+      "Financial report created successfully"
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string(),
+        error: z.string().optional(),
+      }),
+      "Invalid request parameters"
+    ),
+    [HttpStatusCodes.CONFLICT]: jsonContent(
+      z.object({
+        message: z.string(),
+        existingReportId: z.number().optional(),
+      }),
+      "Report already exists for this period/project/statement combination"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      z.object({
+        message: z.string(),
+        details: z.string().optional(),
+      }),
+      "Project or reporting period not found"
+    ),
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: jsonContent(
+      z.object({
+        message: z.string(),
+        error: z.string().optional(),
+      }),
+      "Report creation failed"
     ),
   },
 });
@@ -439,11 +500,234 @@ export const getWorkflowLogs = createRoute({
   },
 });
 
+// ============================================================================
+// PERIOD LOCK ROUTES
+// ============================================================================
+
+export const getPeriodLocks = createRoute({
+  path: "/period-locks",
+  method: "get",
+  tags: ["period-locks"],
+  summary: "Get all period locks for a facility",
+  description: "Retrieves all period locks with related entities for a specific facility.",
+  request: {
+    query: z.object({
+      facilityId: z.coerce.number().int().positive(),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        locks: z.array(z.any()),
+      }),
+      "Period locks retrieved successfully"
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string(),
+        error: z.string().optional(),
+      }),
+      "Invalid request parameters"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have access to this facility"
+    ),
+  },
+});
+
+export const unlockPeriod = createRoute({
+  path: "/period-locks/{id}/unlock",
+  method: "post",
+  tags: ["period-locks"],
+  summary: "Unlock a reporting period (admin only)",
+  description: "Allows administrators to unlock a period for corrections. Requires admin or superadmin role.",
+  request: {
+    params: IdParamsSchema,
+    body: jsonContent(
+      z.object({
+        reason: z.string().min(1, 'Unlock reason is required'),
+      }),
+      "Unlock reason (required for audit)"
+    ),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string(),
+        periodLock: z.any(),
+      }),
+      "Period unlocked successfully"
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string(),
+        error: z.string().optional(),
+      }),
+      "Invalid request or missing reason"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have admin permission"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Period lock not found"
+    ),
+  },
+});
+
+export const getPeriodLockAudit = createRoute({
+  path: "/period-locks/audit/{id}",
+  method: "get",
+  tags: ["period-locks"],
+  summary: "Get audit log for a period lock",
+  description: "Retrieves the complete audit trail for a specific period lock, including all lock/unlock actions and edit attempts.",
+  request: {
+    params: IdParamsSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        auditLogs: z.array(z.any()),
+      }),
+      "Audit logs retrieved successfully"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have access to this period lock"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Period lock not found"
+    ),
+  },
+});
+
+// ============================================================================
+// VERSION CONTROL ROUTES
+// ============================================================================
+
+export const getVersions = createRoute({
+  path: "/financial-reports/{id}/versions",
+  method: "get",
+  tags: ["financial-reports", "versions"],
+  summary: "Get all versions for a financial report",
+  description: "Retrieves the complete version history for a financial report, including snapshot metadata and creator information.",
+  request: {
+    params: IdParamsSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      getVersionsResponseSchema,
+      "Report versions retrieved successfully"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have access to this report"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Financial report not found"
+    ),
+  },
+});
+
+export const getVersion = createRoute({
+  path: "/financial-reports/{id}/versions/{versionNumber}",
+  method: "get",
+  tags: ["financial-reports", "versions"],
+  summary: "Get a specific version of a financial report",
+  description: "Retrieves a specific version of a financial report by version number, including complete snapshot data.",
+  request: {
+    params: z.object({
+      id: z.coerce.number().int().positive(),
+      versionNumber: z.string().min(1),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      getVersionResponseSchema,
+      "Report version retrieved successfully"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have access to this report"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Report version not found"
+    ),
+  },
+});
+
+export const compareVersions = createRoute({
+  path: "/financial-reports/{id}/versions/compare",
+  method: "post",
+  tags: ["financial-reports", "versions"],
+  summary: "Compare two versions of a financial report",
+  description: "Performs a line-by-line comparison between two report versions, highlighting differences and calculating percentage changes.",
+  request: {
+    params: IdParamsSchema,
+    body: jsonContent(
+      compareVersionsRequestSchema,
+      "Version comparison parameters"
+    ),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      compareVersionsResponseSchema,
+      "Version comparison completed successfully"
+    ),
+    [HttpStatusCodes.BAD_REQUEST]: jsonContent(
+      z.object({
+        message: z.string(),
+        error: z.string().optional(),
+      }),
+      "Invalid request parameters"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have access to this report"
+    ),
+    [HttpStatusCodes.NOT_FOUND]: jsonContent(
+      notFoundSchema,
+      "Report or version not found"
+    ),
+  },
+});
+
 export type ListRoute = typeof list;
 export type GetOneRoute = typeof getOne;
 export type PatchRoute = typeof patch;
 export type RemoveRoute = typeof remove;
 export type GenerateStatementRoute = typeof generateStatement;
+export type CreateReportFromStatementRoute = typeof createReportFromStatement;
 export type ExportStatementRoute = typeof exportStatement;
 export type SubmitForApprovalRoute = typeof submitForApproval;
 export type DafApproveRoute = typeof dafApprove;
@@ -451,3 +735,9 @@ export type DafRejectRoute = typeof dafReject;
 export type DgApproveRoute = typeof dgApprove;
 export type DgRejectRoute = typeof dgReject;
 export type GetWorkflowLogsRoute = typeof getWorkflowLogs;
+export type GetPeriodLocksRoute = typeof getPeriodLocks;
+export type UnlockPeriodRoute = typeof unlockPeriod;
+export type GetPeriodLockAuditRoute = typeof getPeriodLockAudit;
+export type GetVersionsRoute = typeof getVersions;
+export type GetVersionRoute = typeof getVersion;
+export type CompareVersionsRoute = typeof compareVersions;

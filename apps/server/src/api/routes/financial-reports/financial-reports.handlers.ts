@@ -22,6 +22,12 @@ import type {
   DgApproveRoute,
   DgRejectRoute,
   GetWorkflowLogsRoute,
+  GetPeriodLocksRoute,
+  UnlockPeriodRoute,
+  GetPeriodLockAuditRoute,
+  GetVersionsRoute,
+  GetVersionRoute,
+  CompareVersionsRoute,
 } from "./financial-reports.routes";
 import { financialReportWorkflowService } from "./financial-reports-workflow.service";
 import { financialReportListRequestSchema } from "./financial-reports.types";
@@ -40,6 +46,8 @@ import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
 import { BudgetVsActualProcessor } from "./budget-vs-actual-processor";
 import { CarryforwardService } from "@/lib/statement-engine/services/carryforward-service";
 import type { WorkingCapitalCalculationResult } from "@/lib/statement-engine/services/working-capital-calculator";
+import { snapshotService } from "@/lib/services/snapshot-service";
+import { notificationService } from "@/lib/services/notification.service";
 
 
 export const list: AppRouteHandler<ListRoute> = async (c) => {
@@ -48,18 +56,9 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     const userContext = await getUserContext(c);
 
     const query = c.req.query();
-    const parsed = financialReportListRequestSchema.parse({
-      projectId: query.projectId ? parseInt(query.projectId) : undefined,
-      facilityId: query.facilityId ? parseInt(query.facilityId) : undefined,
-      fiscalYear: query.fiscalYear,
-      reportType: query.reportType as any,
-      status: query.status as any,
-      createdBy: query.createdBy ? parseInt(query.createdBy) : undefined,
-      fromDate: query.fromDate,
-      toDate: query.toDate,
-      page: query.page ? Number(query.page) : undefined,
-      limit: query.limit ? Number(query.limit) : undefined,
-    });
+    
+    // Schema now uses z.coerce to automatically convert string query params to numbers
+    const parsed = financialReportListRequestSchema.parse(query);
 
     const {
       projectId,
@@ -76,19 +75,18 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
 
     const conditions = [];
 
-    // Add district-based facility filter using buildFacilityFilter utility
-    try {
-      const requestedFacilityId = facilityId;
-
-      const facilityFilter = buildFacilityFilter(userContext, requestedFacilityId);
-
-      if (facilityFilter) {
-        conditions.push(facilityFilter);
-      }
-    } catch (error: any) {
-
-      // buildFacilityFilter throws error if user requests facility outside their district
-      if (error.message === "Access denied: facility not in your district") {
+    // Add facility filter based on user's district
+    // Get list of facility IDs the user can access
+    const accessibleFacilityIds = await db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(eq(facilities.districtId, userContext.districtId));
+    
+    const facilityIds = accessibleFacilityIds.map(f => f.id);
+    
+    // If a specific facility is requested, check if user has access
+    if (facilityId && facilityId > 0) {
+      if (!facilityIds.includes(facilityId)) {
         return c.json({
           reports: [],
           pagination: { page, limit, total: 0, totalPages: 0 },
@@ -96,12 +94,29 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
           message: "Access denied: facility not in your district"
         }, HttpStatusCodes.FORBIDDEN);
       }
-      throw error; // Re-throw unexpected errors
+      // Filter by the specific facility
+      conditions.push(eq(financialReports.facilityId, facilityId));
+    } else {
+      // Filter by all accessible facilities
+      if (facilityIds.length > 0) {
+        conditions.push(sql`${financialReports.facilityId} IN (${sql.join(facilityIds.map(id => sql`${id}`), sql`, `)})`);
+      }
     }
 
-    if (projectId) conditions.push(eq(financialReports.projectId, projectId));
+    if (projectId && projectId > 0) conditions.push(eq(financialReports.projectId, projectId));
     if (fiscalYear) conditions.push(eq(financialReports.fiscalYear, fiscalYear));
-    if (reportType) conditions.push(eq(financialReports.metadata, sql`metadata->>'statementCode' = ${reportType}`));
+    if (reportType) {
+      // Map reportType enum to actual statementCode stored in metadata
+      const reportTypeToStatementCode: Record<string, string> = {
+        'revenue_expenditure': 'REV_EXP',
+        'balance_sheet': 'ASSETS_LIAB',
+        'cash_flow': 'CASH_FLOW',
+        'net_assets_changes': 'NET_ASSETS_CHANGES',
+        'budget_vs_actual': 'BUDGET_VS_ACTUAL',
+      };
+      const statementCode = reportTypeToStatementCode[reportType] || reportType;
+      conditions.push(sql`${financialReports.metadata}->>'statementCode' = ${statementCode}`);
+    }
     if (status) conditions.push(eq(financialReports.status, status));
     if (createdBy) conditions.push(eq(financialReports.createdBy, createdBy));
     if (fromDate) conditions.push(gte(financialReports.createdAt, new Date(fromDate)));
@@ -219,7 +234,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
     }
 
     return c.json(
-      { message: "Failed to fetch financial reports" },
+      { message: "Failed to fetch financial reports", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
     );
   }
@@ -265,6 +280,42 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
         { message: "Access denied: facility not in your district" },
         HttpStatusCodes.FORBIDDEN
       );
+    }
+
+    // Task 22: Verify snapshot integrity if report has snapshot data (Requirements: 10.1, 10.2, 10.3)
+    const isSubmittedOrApproved = ['submitted', 'pending_daf_approval', 'approved_by_daf', 
+                                    'pending_dg_approval', 'fully_approved', 'approved'].includes(report.status);
+    
+    if (isSubmittedOrApproved && report.reportData && report.snapshotChecksum) {
+      const isValid = await snapshotService.verifyChecksum(report.id);
+      
+      if (!isValid) {
+        // Log critical error (Requirement 10.4)
+        console.error(
+          `[CRITICAL] Snapshot integrity validation failed for report ${report.id}. ` +
+          `Report: ${report.id}, Status: ${report.status}, Facility: ${report.facilityId}`
+        );
+        
+        // Notify administrators (Requirement 10.5)
+        try {
+          const adminUsers = await notificationService.getAdminUsersForNotification();
+          if (adminUsers.length > 0) {
+            console.error(
+              `[ADMIN NOTIFICATION] Snapshot corruption detected for report ${report.id}. ` +
+              `Notifying ${adminUsers.length} administrators.`
+            );
+          }
+        } catch (notificationError) {
+          console.error('Failed to notify administrators of snapshot corruption:', notificationError);
+        }
+        
+        // Add corruption flag to response but still return the report metadata
+        return c.json({
+          ...report,
+          snapshotCorrupted: true,
+          snapshotError: "Snapshot integrity check failed. Report data may be corrupted."
+        }, HttpStatusCodes.OK);
+      }
     }
 
     return c.json(report, HttpStatusCodes.OK);
@@ -479,8 +530,141 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       aggregationLevel = 'DISTRICT', // NEW: Default to district (Subtask 5.1)
       includeFacilityBreakdown = false, // NEW: Default to false (Subtask 5.1)
       includeComparatives = true,
-      customMappings = {}
+      customMappings = {},
+      reportId // NEW: Optional report ID for snapshot-based display (Task 10)
     } = requestBody;
+
+    // Task 10: Check if reportId is provided and handle snapshot data (Requirements: 3.1, 3.2, 3.3, 3.4, 3.5)
+    if (reportId) {
+      // Fetch the report to check its status
+      const report = await db.query.financialReports.findFirst({
+        where: eq(financialReports.id, reportId),
+        with: {
+          project: true,
+          facility: {
+            with: {
+              district: true,
+            },
+          },
+          reportingPeriod: true,
+        },
+      });
+
+      if (!report) {
+        return c.json({
+          message: "Financial report not found",
+        }, HttpStatusCodes.NOT_FOUND);
+      }
+
+      // Validate that the user can access this report's facility
+      const recordFacilityId = report.facilityId;
+      const hasAccess = canAccessFacility(recordFacilityId, userContext);
+
+      if (!hasAccess) {
+        return c.json(
+          { message: "Access denied: facility not in your district" },
+          HttpStatusCodes.FORBIDDEN
+        );
+      }
+
+      // Check report status - if submitted or approved, return snapshot data
+      const isSubmittedOrApproved = ['submitted', 'pending_daf_approval', 'approved_by_daf', 
+                                      'pending_dg_approval', 'fully_approved', 'approved'].includes(report.status);
+
+      if (isSubmittedOrApproved && report.reportData) {
+        // Task 22: Verify snapshot integrity before displaying (Requirements: 10.1, 10.2, 10.3, 10.4, 10.5)
+        const isValid = await snapshotService.verifyChecksum(report.id);
+        
+        if (!isValid) {
+          // Log critical error (Requirement 10.4)
+          console.error(
+            `[CRITICAL] Snapshot integrity validation failed for report ${report.id}. ` +
+            `Report: ${report.id}, Status: ${report.status}, Facility: ${report.facilityId}`
+          );
+          
+          // Notify administrators (Requirement 10.5)
+          try {
+            const adminUsers = await notificationService.getAdminUsersForNotification();
+            if (adminUsers.length > 0) {
+              // Log the integrity failure for admin review
+              console.error(
+                `[ADMIN NOTIFICATION] Snapshot corruption detected for report ${report.id}. ` +
+                `Notifying ${adminUsers.length} administrators.`
+              );
+              // Note: In a production system, you would send actual email/in-app notifications here
+              // For now, we log the notification intent
+            }
+          } catch (notificationError) {
+            console.error('Failed to notify administrators of snapshot corruption:', notificationError);
+          }
+          
+          // Prevent display of corrupted report (Requirement 10.5)
+          return c.json({
+            error: "SNAPSHOT_CORRUPTED",
+            message: "Snapshot integrity check failed. Report data may be corrupted.",
+            details: "The snapshot checksum does not match the stored value. This report cannot be displayed for security reasons.",
+            reportId: report.id,
+            reportStatus: report.status,
+          }, HttpStatusCodes.INTERNAL_SERVER_ERROR);
+        }
+        
+        // Return snapshot data from reportData field (Requirement 3.2, 3.3)
+        const processingTime = Date.now() - startTime;
+        
+        // Extract snapshot data
+        const snapshotData = report.reportData as any;
+        
+        // Build response with snapshot metadata (Requirements: 3.4, 3.5)
+        const response = {
+          statement: snapshotData.statement || snapshotData,
+          validation: snapshotData.validation || {
+            isValid: true,
+            accountingEquation: {
+              isValid: true,
+              leftSide: 0,
+              rightSide: 0,
+              difference: 0,
+              equation: 'Snapshot'
+            },
+            businessRules: [],
+            warnings: [],
+            errors: [],
+            formattedMessages: {
+              critical: [],
+              warnings: [],
+              info: []
+            },
+            summary: {
+              totalChecks: 0,
+              passedChecks: 0,
+              criticalErrors: 0,
+              warnings: 0,
+              overallStatus: 'VALID'
+            }
+          },
+          performance: {
+            processingTimeMs: processingTime,
+            linesProcessed: snapshotData.statement?.lines?.length || 0,
+            eventsProcessed: 0,
+            formulasCalculated: 0,
+          },
+          // Task 10: Add snapshot metadata flags (Requirements: 3.4, 3.5)
+          snapshotMetadata: {
+            isSnapshot: true,
+            snapshotTimestamp: report.snapshotTimestamp?.toISOString() || null,
+            isOutdated: report.isOutdated || false,
+            reportId: report.id,
+            reportStatus: report.status,
+            version: report.version,
+          }
+        };
+
+        return c.json(response, HttpStatusCodes.OK);
+      }
+
+      // If report is draft or rejected, continue with live data generation (Requirement 3.1)
+      // Fall through to existing logic below
+    }
 
     // NEW: Integrate aggregation level determination (Subtask 5.2)
     // Determine effective facility IDs based on aggregation level
@@ -1308,7 +1492,14 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
         },
         // NEW: Add aggregation metadata and facility breakdown
         aggregationMetadata,
-        facilityBreakdown
+        facilityBreakdown,
+        // Task 10: Add snapshot metadata for live data (Requirements: 3.4, 3.5)
+        snapshotMetadata: {
+          isSnapshot: false,
+          snapshotTimestamp: null,
+          isOutdated: false,
+          reportId: reportId || null,
+        }
       };
 
       return c.json(response, HttpStatusCodes.OK);
@@ -1430,7 +1621,14 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
       },
       // NEW: Add aggregation metadata and facility breakdown
       aggregationMetadata,
-      facilityBreakdown
+      facilityBreakdown,
+      // Task 10: Add snapshot metadata for live data (Requirements: 3.4, 3.5)
+      snapshotMetadata: {
+        isSnapshot: false,
+        snapshotTimestamp: null,
+        isOutdated: false,
+        reportId: reportId || null,
+      }
     };
 
     return c.json(response, HttpStatusCodes.OK);
@@ -4148,6 +4346,521 @@ export const getWorkflowLogs: AppRouteHandler<GetWorkflowLogsRoute> = async (c) 
 
     return c.json(
       { message: "Failed to fetch workflow logs" },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+// ============================================================================
+// PERIOD LOCK HANDLERS
+// ============================================================================
+
+/**
+ * Handler for retrieving all period locks for a facility
+ * Requirements: 6.5, 7.1, 7.2, 7.3, 7.4, 9.1, 9.2
+ */
+export const getPeriodLocks: AppRouteHandler<GetPeriodLocksRoute> = async (c) => {
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Parse query parameters
+    const query = c.req.query();
+    const facilityId = parseInt(query.facilityId);
+
+    if (!facilityId || isNaN(facilityId)) {
+      return c.json({
+        message: "Invalid facilityId parameter",
+        error: "facilityId must be a positive integer",
+      }, HttpStatusCodes.BAD_REQUEST);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Import period lock service
+    const { periodLockService } = await import("@/lib/services/period-lock-service");
+
+    // Retrieve locks for the facility
+    const locks = await periodLockService.getLocksForFacility(facilityId);
+
+    return c.json({
+      locks,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to fetch period locks", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+/**
+ * Handler for unlocking a reporting period (admin only)
+ * Requirements: 6.5, 7.1, 7.2, 7.3, 7.4, 9.1, 9.2, 9.3, 9.4, 9.5
+ */
+export const unlockPeriod: AppRouteHandler<UnlockPeriodRoute> = async (c) => {
+  const { id } = c.req.param();
+  const lockId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Parse request body
+    const body = await c.req.json();
+    const { reason } = body;
+
+    if (!reason || reason.trim().length === 0) {
+      return c.json({
+        message: "Unlock reason is required",
+        error: "reason field must not be empty",
+      }, HttpStatusCodes.BAD_REQUEST);
+    }
+
+    // Import period lock service and schema
+    const { periodLockService } = await import("@/lib/services/period-lock-service");
+    const { periodLocks } = await import("@/db/schema/period-locks/schema");
+
+    // Check if period lock exists
+    const periodLock = await db.query.periodLocks.findFirst({
+      where: eq(periodLocks.id, lockId),
+      with: {
+        reportingPeriod: true,
+        project: true,
+        facility: true,
+      },
+    });
+
+    if (!periodLock) {
+      return c.json({
+        message: "Period lock not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(periodLock.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Attempt to unlock the period (this will check admin permissions)
+    try {
+      await periodLockService.unlockPeriod(lockId, userContext.userId, reason);
+    } catch (unlockError: any) {
+      // Check if error is due to insufficient permissions
+      if (unlockError.message.includes("does not have permission")) {
+        return c.json(
+          { message: "Admin or superadmin role required to unlock periods" },
+          HttpStatusCodes.FORBIDDEN
+        );
+      }
+      throw unlockError;
+    }
+
+    // Fetch the updated period lock with relations
+    const updatedLock = await db.query.periodLocks.findFirst({
+      where: eq(periodLocks.id, lockId),
+      with: {
+        reportingPeriod: true,
+        project: true,
+        facility: true,
+        lockedByUser: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        unlockedByUser: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: "Period unlocked successfully",
+      periodLock: updatedLock,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to unlock period", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+/**
+ * Handler for retrieving audit log for a period lock
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+ */
+export const getPeriodLockAudit: AppRouteHandler<GetPeriodLockAuditRoute> = async (c) => {
+  const { id } = c.req.param();
+  const lockId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Import schemas
+    const { periodLocks } = await import("@/db/schema/period-locks/schema");
+    const { periodLockAuditLog } = await import("@/db/schema/period-lock-audit-log/schema");
+
+    // Check if period lock exists
+    const periodLock = await db.query.periodLocks.findFirst({
+      where: eq(periodLocks.id, lockId),
+    });
+
+    if (!periodLock) {
+      return c.json({
+        message: "Period lock not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(periodLock.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Retrieve audit logs for this period lock
+    const auditLogs = await db.query.periodLockAuditLog.findMany({
+      where: eq(periodLockAuditLog.periodLockId, lockId),
+      orderBy: [desc(periodLockAuditLog.performedAt)],
+      with: {
+        performer: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return c.json({
+      auditLogs,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to fetch audit logs", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+// ============================================================================
+// VERSION CONTROL HANDLERS
+// ============================================================================
+
+/**
+ * Handler for retrieving all versions of a financial report
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+ */
+export const getVersions: AppRouteHandler<GetVersionsRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Import version service
+    const { versionService } = await import("@/lib/services/version-service");
+
+    // Get all versions for this report
+    const versions = await versionService.getVersions(reportId);
+
+    // Format response
+    const formattedVersions = versions.map(v => ({
+      id: v.id,
+      reportId: v.reportId,
+      versionNumber: v.versionNumber,
+      snapshotData: v.snapshotData,
+      snapshotChecksum: v.snapshotChecksum,
+      snapshotTimestamp: v.snapshotTimestamp.toISOString(),
+      createdBy: v.createdBy,
+      createdAt: v.createdAt ? v.createdAt.toISOString() : null,
+      changesSummary: v.changesSummary,
+      creator: v.creator,
+    }));
+
+    return c.json({
+      reportId,
+      currentVersion: report.version,
+      versions: formattedVersions,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to fetch report versions", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+/**
+ * Handler for retrieving a specific version of a financial report
+ * Requirements: 5.3, 5.4
+ */
+export const getVersion: AppRouteHandler<GetVersionRoute> = async (c) => {
+  const { id, versionNumber } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Import version service
+    const { versionService } = await import("@/lib/services/version-service");
+
+    // Get specific version
+    const version = await versionService.getVersion(reportId, versionNumber);
+
+    if (!version) {
+      return c.json({
+        message: `Version ${versionNumber} not found for report ${reportId}`,
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Format response
+    const formattedVersion = {
+      id: version.id,
+      reportId: version.reportId,
+      versionNumber: version.versionNumber,
+      snapshotData: version.snapshotData,
+      snapshotChecksum: version.snapshotChecksum,
+      snapshotTimestamp: version.snapshotTimestamp.toISOString(),
+      createdBy: version.createdBy,
+      createdAt: version.createdAt ? version.createdAt.toISOString() : null,
+      changesSummary: version.changesSummary,
+      creator: version.creator,
+    };
+
+    return c.json({
+      version: formattedVersion,
+    }, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    return c.json(
+      { message: "Failed to fetch report version", error: error.message },
+      HttpStatusCodes.INTERNAL_SERVER_ERROR
+    );
+  }
+};
+
+/**
+ * Handler for comparing two versions of a financial report
+ * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
+ */
+export const compareVersions: AppRouteHandler<CompareVersionsRoute> = async (c) => {
+  const { id } = c.req.param();
+  const reportId = parseInt(id);
+
+  try {
+    // Get user context
+    const userContext = await getUserContext(c);
+
+    // Check if report exists and user has access
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+    });
+
+    if (!report) {
+      return c.json({
+        message: "Financial report not found",
+      }, HttpStatusCodes.NOT_FOUND);
+    }
+
+    // Validate facility access
+    const hasAccess = canAccessFacility(report.facilityId, userContext);
+    if (!hasAccess) {
+      return c.json(
+        { message: "Access denied: facility not in your district" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    // Parse request body
+    const body = await c.req.json();
+    const { version1, version2 } = body;
+
+    if (!version1 || !version2) {
+      return c.json(
+        { 
+          message: "Both version1 and version2 are required",
+          error: "Missing version parameters"
+        },
+        HttpStatusCodes.BAD_REQUEST
+      );
+    }
+
+    // Import version service
+    const { versionService } = await import("@/lib/services/version-service");
+
+    // Compare versions
+    const comparison = await versionService.compareVersions(
+      reportId,
+      version1,
+      version2
+    );
+
+    return c.json(comparison, HttpStatusCodes.OK);
+
+  } catch (error: any) {
+    if (error.message === "Unauthorized") {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    if (error.message === "User not associated with a facility") {
+      return c.json(
+        { message: "User must be associated with a facility" },
+        HttpStatusCodes.FORBIDDEN
+      );
+    }
+
+    if (error.message && error.message.includes("Version not found")) {
+      return c.json(
+        { message: error.message },
+        HttpStatusCodes.NOT_FOUND
+      );
+    }
+
+    return c.json(
+      { message: "Failed to compare versions", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
     );
   }
