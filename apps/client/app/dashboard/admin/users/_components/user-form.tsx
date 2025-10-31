@@ -22,9 +22,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FacilitySelector } from "@/components/facility-selector";
+import { HierarchyFacilitySelector } from "@/components/hierarchy-facility-selector";
 import type { UserRole } from "@/types/user";
 
-const userRoles: UserRole[] = ["admin", "accountant", "program_manager"];
+const userRoles: UserRole[] = ["admin", "accountant", "program_manager", "daf", "dg"];
 
 const permissionOptions = [
   { value: "view_reports", label: "View Reports" },
@@ -47,6 +48,10 @@ export function UserForm<T extends FieldValues>({
   onSubmit,
   children,
 }: UserFormProps<T>) {
+  // Watch the role field to conditionally render facility selector
+  const selectedRole = form.watch("role" as FieldPath<T>);
+  const isDafOrDg = selectedRole === "daf" || selectedRole === "dg";
+
   return (
     <Form {...form}>
       <form
@@ -142,13 +147,29 @@ export function UserForm<T extends FieldValues>({
           name={"facilityId" as FieldPath<T>}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Facility</FormLabel>
+              <FormLabel>
+                Facility
+                {isDafOrDg && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (Hospital required for DAF/DG roles)
+                  </span>
+                )}
+              </FormLabel>
               <FormControl>
-                <FacilitySelector
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={form.formState.errors.facilityId?.message as string | undefined}
-                />
+                {isDafOrDg ? (
+                  <HierarchyFacilitySelector
+                    value={field.value}
+                    onChange={field.onChange}
+                    error={form.formState.errors.facilityId?.message as string | undefined}
+                    hospitalOnly={true}
+                  />
+                ) : (
+                  <FacilitySelector
+                    value={field.value}
+                    onChange={field.onChange}
+                    error={form.formState.errors.facilityId?.message as string | undefined}
+                  />
+                )}
               </FormControl>
               <FormMessage />
             </FormItem>

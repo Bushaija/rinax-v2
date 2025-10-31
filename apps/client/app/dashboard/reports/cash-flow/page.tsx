@@ -9,6 +9,8 @@ import { getCurrentFiscalYear } from '@/features/execution/utils';
 import useGenerateStatement from '@/hooks/mutations/financial-reports/use-generate-statement';
 import { useToast } from '@/hooks/use-toast';
 import { transformStatementData } from '../utils/transform-statement-data';
+import { FinancialReportStatusCard } from '@/components/reports/financial-report-status-card';
+import { useGetReportId } from '@/hooks/queries/financial-reports';
 
 // Project configuration
 const projectTabs: FilterTab[] = [
@@ -39,6 +41,19 @@ const TabContent = ({ tabValue, periodId }: { tabValue: string; periodId: number
     'hiv': 'HIV',
     'malaria': 'Malaria',
     'tb': 'TB'
+  };
+
+  // Fetch the report ID for this project and period
+  const { data: reportId, refetch: refetchReportId } = useGetReportId({
+    reportingPeriodId: periodId,
+    projectType: projectTypeMapping[tabValue],
+    statementType: "cash-flow",
+    enabled: !!periodId,
+  });
+
+  // Handle report creation - refetch the report ID
+  const handleReportCreated = () => {
+    refetchReportId();
   };
 
   useEffect(() => {
@@ -87,7 +102,22 @@ const TabContent = ({ tabValue, periodId }: { tabValue: string; periodId: number
   // Transform API data to component format
   const transformedData = transformStatementData(statementData.lines ?? []);
 
-  return <CashFlowStatement initialData={transformedData} {...periodLabels} />
+  return (
+    <div className="flex gap-4">
+      <div className="flex-1">
+        <CashFlowStatement initialData={transformedData} {...periodLabels} />
+      </div>
+      <div className="w-80">
+        <FinancialReportStatusCard
+          reportId={reportId ?? null}
+          projectType={projectTypeMapping[tabValue]}
+          statementType="cash-flow"
+          reportingPeriodId={periodId}
+          onReportCreated={handleReportCreated}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function CashFlowPage() {

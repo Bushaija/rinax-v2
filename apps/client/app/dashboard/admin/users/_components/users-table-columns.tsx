@@ -35,8 +35,9 @@ import {
 import type { User as UserType, UserRole } from "@/types/user";
 import { formatDate } from "@/lib/format";
 import type { DataTableRowAction } from "@/types/data-table";
+import { cn } from "@/lib/utils";
 
-const userRoles: UserRole[] = ["admin", "accountant", "program_manager"];
+const userRoles: UserRole[] = ["admin", "accountant", "program_manager", "daf", "dg"];
 
 const getRoleIcon = (role: UserRole) => {
   switch (role) {
@@ -46,6 +47,10 @@ const getRoleIcon = (role: UserRole) => {
       return User;
     case "program_manager":
       return UserCheck;
+    case "daf":
+      return CheckCircle2;
+    case "dg":
+      return Shield;
     default:
       return User;
   }
@@ -59,6 +64,10 @@ const getRoleVariant = (role: UserRole) => {
       return "secondary";
     case "program_manager":
       return "default";
+    case "daf":
+      return "default";
+    case "dg":
+      return "destructive";
     default:
       return "outline";
   }
@@ -164,11 +173,29 @@ export function getUsersTableColumns({
         <DataTableColumnHeader column={column} title="Facility" />
       ),
       cell: ({ row }) => {
-        const facility = row.original.facility;
+        const user = row.original;
+        const facility = user.facility;
+        const isDafOrDg = user.role === "daf" || user.role === "dg";
+        
         return (
-          <div className="flex items-center gap-2">
-            <Building className="size-4 text-muted-foreground" />
-            <span>{facility?.name || `Facility ${row.original.facilityId}`}</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Building className="size-4 text-muted-foreground shrink-0" />
+              <span className="truncate">{facility?.name || `Facility ${user.facilityId}`}</span>
+            </div>
+            {isDafOrDg && facility?.facilityType && (
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "w-fit text-xs",
+                  facility.facilityType === "hospital" 
+                    ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800"
+                    : "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
+                )}
+              >
+                {facility.facilityType === "hospital" ? "Hospital" : "Health Center"}
+              </Badge>
+            )}
           </div>
         );
       },

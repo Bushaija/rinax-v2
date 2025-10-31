@@ -271,6 +271,78 @@ export const exportStatement = createRoute({
 // APPROVAL WORKFLOW ROUTES
 // ============================================================================
 
+export const getDafQueue = createRoute({
+  path: "/financial-reports/daf-queue",
+  method: "get",
+  tags,
+  summary: "Get DAF approval queue",
+  description: "Retrieves all financial reports pending DAF approval that are accessible to the current user based on facility hierarchy",
+  request: {
+    query: z.object({
+      page: z.coerce.number().int().default(1),
+      limit: z.coerce.number().int().default(20),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        reports: z.array(financialReportWithRelationsSchema),
+        pagination: z.object({
+          page: z.number(),
+          limit: z.number(),
+          total: z.number(),
+          totalPages: z.number(),
+        }),
+      }),
+      "DAF approval queue retrieved successfully"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have DAF role or access to facilities"
+    ),
+  },
+});
+
+export const getDgQueue = createRoute({
+  path: "/financial-reports/dg-queue",
+  method: "get",
+  tags,
+  summary: "Get DG approval queue",
+  description: "Retrieves all financial reports approved by DAF and pending DG approval that are accessible to the current user based on facility hierarchy",
+  request: {
+    query: z.object({
+      page: z.coerce.number().int().default(1),
+      limit: z.coerce.number().int().default(20),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        reports: z.array(financialReportWithRelationsSchema),
+        pagination: z.object({
+          page: z.number(),
+          limit: z.number(),
+          total: z.number(),
+          totalPages: z.number(),
+        }),
+      }),
+      "DG approval queue retrieved successfully"
+    ),
+    [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+      z.object({ message: z.string() }),
+      "Authentication required"
+    ),
+    [HttpStatusCodes.FORBIDDEN]: jsonContent(
+      z.object({ message: z.string() }),
+      "User does not have DG role or access to facilities"
+    ),
+  },
+});
+
 export const submitForApproval = createRoute({
   path: "/financial-reports/{id}/submit",
   method: "post",
@@ -729,6 +801,8 @@ export type RemoveRoute = typeof remove;
 export type GenerateStatementRoute = typeof generateStatement;
 export type CreateReportFromStatementRoute = typeof createReportFromStatement;
 export type ExportStatementRoute = typeof exportStatement;
+export type GetDafQueueRoute = typeof getDafQueue;
+export type GetDgQueueRoute = typeof getDgQueue;
 export type SubmitForApprovalRoute = typeof submitForApproval;
 export type DafApproveRoute = typeof dafApprove;
 export type DafRejectRoute = typeof dafReject;

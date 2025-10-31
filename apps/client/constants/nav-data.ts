@@ -227,36 +227,36 @@ const ALL_NAV_ITEMS: RoleNavItem[] = [
   },
 
   // APPROVAL WORKFLOWS
-  // {
-  //   title: 'Approvals',
-  //   url: '/dashboard/financial-reports',
-  //   icon: 'clipboardCheck',
-  //   shortcut: ['a', 'p'],
-  //   isActive: true,
-  //   roles: ['accountant', 'daf', 'dg'],
-  //   items: [
-  //     {
-  //       title: 'My Reports',
-  //       url: '/dashboard/financial-reports',
-  //       icon: 'fileText',
-  //       roles: ['accountant']
-  //     },
-  //     {
-  //       title: 'DAF Queue',
-  //       url: '/dashboard/financial-reports/daf-queue',
-  //       icon: 'clipboardCheck',
-  //       shortcut: ['d', 'q'],
-  //       roles: ['daf']
-  //     },
-  //     {
-  //       title: 'DG Queue',
-  //       url: '/dashboard/financial-reports/dg-queue',
-  //       icon: 'clipboardCheck',
-  //       shortcut: ['d', 'g'],
-  //       roles: ['dg']
-  //     },
-  //   ]
-  // },
+  {
+    title: 'Approvals',
+    url: '/dashboard/financial-reports',
+    icon: 'clipboardCheck',
+    shortcut: ['a', 'p'],
+    isActive: true,
+    roles: ['accountant', 'daf', 'dg'],
+    items: [
+      {
+        title: 'My Reports',
+        url: '/dashboard/financial-reports',
+        icon: 'fileText',
+        roles: ['accountant']
+      },
+      {
+        title: 'DAF Queue',
+        url: '/dashboard/financial-reports/daf-queue',
+        icon: 'clipboardCheck',
+        shortcut: ['d', 'q'],
+        roles: ['daf']
+      },
+      {
+        title: 'DG Queue',
+        url: '/dashboard/financial-reports/dg-queue',
+        icon: 'clipboardCheck',
+        shortcut: ['d', 'g'],
+        roles: ['dg']
+      },
+    ]
+  },
 
   // ANALYTICS & INSIGHTS
   // {

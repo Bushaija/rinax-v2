@@ -15,8 +15,15 @@ interface DafReviewCardProps {
     submittedAt: string | null;
     facility?: {
       name: string;
+      facilityType?: string;
+      district?: {
+        name: string;
+      };
     };
     project?: {
+      name: string;
+    };
+    submitter?: {
       name: string;
     };
   };
@@ -44,38 +51,67 @@ export function DafReviewCard({ report, onClick }: DafReviewCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="space-y-2">
+          {/* Facility Information with Hierarchy Context */}
           {report.facility && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground truncate">
-                {report.facility.name}
-              </span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium truncate">
+                  {report.facility.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 ml-6">
+                {report.facility.facilityType && (
+                  <Badge variant="outline" className="text-xs">
+                    {report.facility.facilityType === 'health_center' ? 'Health Center' : 'Hospital'}
+                  </Badge>
+                )}
+                {report.facility.district && (
+                  <span className="text-xs text-muted-foreground">
+                    {report.facility.district.name}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
-          {report.project && (
-            <div className="flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground truncate">
-                {report.project.name}
-              </span>
+          {/* Submitter Information */}
+          {report.submitter && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Submitted by {report.submitter.name}</span>
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">FY {report.fiscalYear}</span>
+          {/* Additional Details */}
+          <div className="grid grid-cols-2 gap-2 text-sm pt-2">
+            {report.project && (
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground truncate text-xs">
+                  {report.project.name}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground text-xs">FY {report.fiscalYear}</span>
+            </div>
+
+            {report.submittedAt && (
+              <div className="flex items-center gap-2 col-span-2">
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground text-xs">
+                  {new Date(report.submittedAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+            )}
           </div>
-
-          {report.submittedAt && (
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground text-xs">
-                Submitted {new Date(report.submittedAt).toLocaleDateString()}
-              </span>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

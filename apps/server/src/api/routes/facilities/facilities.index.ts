@@ -10,7 +10,9 @@ const router = createRouter()
     .openapi(routes.getPlanned, handlers.getPlanned)
     .openapi(routes.getExecution, handlers.getExecution)
     .openapi(routes.getAll, handlers.getAll)
-    .openapi(routes.getOne, handlers.getOne);
+    .openapi(routes.getAccessible, handlers.getAccessible)
+    .openapi(routes.getOne, handlers.getOne)
+    .openapi(routes.getHierarchy, handlers.getHierarchy);
         // .openapi(routes.create, handlers.create)
         // .openapi(routes.update, handlers.update)
         // .openapi(routes.remove, handlers.remove);

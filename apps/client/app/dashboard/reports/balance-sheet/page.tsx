@@ -20,7 +20,7 @@ const projectTabs: FilterTab[] = [
     content: null // Will be populated with the report component
   },
   {
-    value: 'malaria', 
+    value: 'malaria',
     label: 'Malaria',
     content: null
   },
@@ -32,11 +32,11 @@ const projectTabs: FilterTab[] = [
 ]
 
 // Tab Content Component that handles loading state
-const TabContent = ({ 
-  tabValue, 
+const TabContent = ({
+  tabValue,
   periodId
-}: { 
-  tabValue: string; 
+}: {
+  tabValue: string;
   periodId: number;
 }) => {
   const [statementData, setStatementData] = useState<any>(null);
@@ -129,7 +129,7 @@ const TabContent = ({
 export default function BalanceSheetPage() {
   const [selectedTab, setSelectedTab] = useState('hiv')
   const reportContentRef = useRef<HTMLDivElement>(null!)
-  
+
   // For now, use a hardcoded period ID
   // TODO: Implement proper reporting period selection
   const periodId = 2;
@@ -138,8 +138,8 @@ export default function BalanceSheetPage() {
   const tabsWithContent = projectTabs.map(tab => ({
     ...tab,
     content: (
-      <TabContent 
-        tabValue={tab.value} 
+      <TabContent
+        tabValue={tab.value}
         periodId={periodId}
       />
     )
@@ -156,7 +156,7 @@ export default function BalanceSheetPage() {
             contentRef={reportContentRef}
             reportingPeriodId={periodId}
           />
-        
+
           {/* 2. Filter Tabs - Always visible */}
           <FilterTabs
             tabs={tabsWithContent}

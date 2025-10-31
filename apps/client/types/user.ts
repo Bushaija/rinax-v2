@@ -1,5 +1,5 @@
 // User types based on API structure
-export type UserRole = "admin" | "accountant" | "program_manager";
+export type UserRole = "admin" | "accountant" | "program_manager" | "daf" | "dg" | "superadmin";
 
 export interface User {
   id: string;

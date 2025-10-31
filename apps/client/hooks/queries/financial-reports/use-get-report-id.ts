@@ -5,7 +5,7 @@ import { getFinancialReports } from "@/fetchers/financial-reports/get-financial-
 interface UseGetReportIdParams {
   reportingPeriodId: number;
   projectType: "HIV" | "Malaria" | "TB";
-  statementType: "revenue-expenditure" | "assets-liabilities";
+  statementType: "revenue-expenditure" | "assets-liabilities" | "cash-flow" | "net-assets-changes" | "budget-vs-actual";
   enabled?: boolean;
 }
 
@@ -23,6 +23,9 @@ function useGetReportId({
   const reportTypeMap = {
     "revenue-expenditure": "revenue_expenditure",
     "assets-liabilities": "balance_sheet",
+    "cash-flow": "cash_flow",
+    "net-assets-changes": "net_assets_changes",
+    "budget-vs-actual": "budget_vs_actual",
   } as const;
 
   return useQuery({

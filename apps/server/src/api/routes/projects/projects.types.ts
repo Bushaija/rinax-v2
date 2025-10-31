@@ -21,7 +21,7 @@ export const userRefSchema = z.object({
   id: z.coerce.number().int(),
   name: z.string(),
   email: z.string(),
-  role: z.enum(['accountant', 'admin', 'program_manager']),
+  role: z.enum(['accountant', 'admin', 'program_manager', 'daf', 'dg']),
 });
 
 // Project schemas

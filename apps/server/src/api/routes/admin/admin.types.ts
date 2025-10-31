@@ -6,7 +6,7 @@ export const userSchema = z.object({
     email: z.string(),
     emailVerified: z.boolean(),
     image: z.string().nullable(),
-    role: z.enum(['accountant', 'admin', 'program_manager']),
+    role: z.enum(['accountant', 'admin', 'program_manager', 'daf', 'dg']),
     facilityId: z.number().nullable(),
     permissions: z.string().nullable(),
     projectAccess: z.string().nullable(),

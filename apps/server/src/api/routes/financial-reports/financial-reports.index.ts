@@ -3,6 +3,7 @@ import { createRouter } from "@/api/lib/create-app";
 import * as handlers from "./financial-reports.handlers";
 import * as routes from "./financial-reports.routes";
 import { createReportFromStatement } from "./create-report-from-statement.handler";
+import { getDafQueue, getDgQueue } from "./approval-queue.handlers";
 
 const router = createRouter()
   .openapi(routes.list, handlers.list)
@@ -10,6 +11,9 @@ const router = createRouter()
   .openapi(routes.generateStatement, handlers.generateStatement)
   .openapi(routes.createReportFromStatement, createReportFromStatement)
   .openapi(routes.exportStatement, handlers.exportStatement)
+  // Approval queue routes (non-parameterized)
+  .openapi(routes.getDafQueue, getDafQueue)
+  .openapi(routes.getDgQueue, getDgQueue)
   // Period lock routes (non-parameterized)
   .openapi(routes.getPeriodLocks, handlers.getPeriodLocks)
   // Now register parameterized routes

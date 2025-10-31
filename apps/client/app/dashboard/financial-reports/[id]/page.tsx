@@ -14,6 +14,8 @@ import { PeriodLockBadge } from "@/components/reports/period-lock-badge";
 import { VersionHistory } from "@/components/reports/version-history";
 import { useReportVersions } from "@/hooks/queries/financial-reports/use-report-versions";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ReportFacilityContext } from "@/components/financial-reports/report-facility-context";
+import { FacilityHierarchyTree } from "@/components/facility-hierarchy-tree";
 
 export default function ViewFinancialReportPage() {
   const params = useParams();
@@ -94,6 +96,23 @@ export default function ViewFinancialReportPage() {
             )}
           </div>
         </div>
+
+        {/* Facility Context - Shows facility information and hierarchy */}
+        {report.facility && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ReportFacilityContext
+              facilityName={report.facility.name}
+              facilityType={report.facility.type as "hospital" | "health_center"}
+              districtName={report.facility.district || "Unknown District"}
+            />
+            {report.facilityId && (
+              <FacilityHierarchyTree
+                facilityId={report.facilityId}
+                showTitle={false}
+              />
+            )}
+          </div>
+        )}
 
         {/* Snapshot Indicator - Shows whether report displays live or snapshot data */}
         <div className="flex items-center gap-3">

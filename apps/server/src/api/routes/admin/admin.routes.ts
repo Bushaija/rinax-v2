@@ -17,7 +17,7 @@ export const createUserAccount = createRoute({
       z.object({
         name: z.string().min(2, "Name must be at least 2 characters"),
         email: z.email({ message: 'This is not a valid email.' }),
-        role: z.enum(['accountant', 'program_manager']).default('accountant'),
+        role: z.enum(['accountant', 'program_manager', 'daf', 'dg']).default('accountant'),
         facilityId: z.number().optional(),
         permissions: z.record(z.string(), z.any()).optional(),
         projectAccess: z.array(z.number()).optional(),
@@ -59,7 +59,7 @@ export const getUsers = createRoute({
     query: z.object({
       page: z.string().optional(),
       limit: z.string().optional(),
-      role: z.enum(['accountant', 'admin', 'program_manager']).optional(),
+      role: z.enum(['accountant', 'admin', 'program_manager', 'daf', 'dg']).optional(),
       facilityId: z.string().optional(),
       isActive: z.enum(['true', 'false']).optional(),
       banned: z.enum(['true', 'false']).optional(),
@@ -131,7 +131,7 @@ export const updateUser = createRoute({
       z.object({
         name: z.string().min(2).optional(),
         email: z.string().email().optional(),
-        role: z.enum(['accountant', 'program_manager']).optional(),
+        role: z.enum(['accountant', 'program_manager', 'daf', 'dg']).optional(),
         facilityId: z.number().nullable().optional(),
         permissions: z.array(z.string()).optional(),
         projectAccess: z.array(z.number()).optional(),

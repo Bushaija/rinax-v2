@@ -1,8 +1,10 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/users/schema";
 import { financialReports } from "@/db/schema/financial-reports/schema";
+import { facilities } from "@/db/schema/facilities/schema";
 import { eq, inArray } from "drizzle-orm";
 import type { ReportStatus } from "./financial-reports.types";
+import { FacilityHierarchyService } from "../../services/facility-hierarchy.service";
 
 /**
  * Notification service for financial report workflow
@@ -14,6 +16,7 @@ export class NotificationService {
   /**
    * Notifies all DAF users when a report is submitted for approval
    * Requirements: 1.4
+   * @deprecated Use notifyDafUsersForFacility instead for hierarchy-aware routing
    */
   async notifyDafUsers(reportId: number, reportTitle: string): Promise<void> {
     try {
@@ -52,8 +55,84 @@ export class NotificationService {
   }
 
   /**
+   * Notifies DAF users at the correct hospital based on facility hierarchy
+   * Requirements: 1.4, 3.1, 9.1-9.5
+   */
+  async notifyDafUsersForFacility(facilityId: number, reportId: number, reportTitle: string): Promise<void> {
+    try {
+      // Get facility details for context
+      const facility = await db.query.facilities.findFirst({
+        where: eq(facilities.id, facilityId),
+        columns: {
+          id: true,
+          name: true,
+          districtId: true,
+        },
+        with: {
+          district: {
+            columns: {
+              name: true,
+            }
+          }
+        }
+      });
+
+      if (!facility) {
+        console.error(`Facility ${facilityId} not found for notification`);
+        return;
+      }
+
+      // Get DAF users for this facility's approval chain
+      const dafUsers = await FacilityHierarchyService.getDafUsersForFacility(facilityId);
+
+      if (dafUsers.length === 0) {
+        console.warn(`No DAF users found for facility ${facilityId} (${facility.name})`);
+        // Fallback to admin users if no DAF users found (Requirement 9.5)
+        const adminUsers = await db.query.users.findMany({
+          where: eq(users.role, 'admin'),
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        });
+        
+        if (adminUsers.length > 0) {
+          console.log(`[NOTIFICATION] Falling back to ${adminUsers.length} admin user(s)`);
+          console.log(`  Report ID: ${reportId}`);
+          console.log(`  Report Title: ${reportTitle}`);
+          console.log(`  Facility: ${facility.name}`);
+          console.log(`  District: ${facility.district?.name || 'Unknown'}`);
+          console.log(`  Recipients:`, adminUsers.map(u => `${u.name} (${u.email})`).join(', '));
+        }
+        return;
+      }
+
+      // Log notification (in production, this would send emails/push notifications)
+      console.log(`[NOTIFICATION] Notifying ${dafUsers.length} DAF user(s) about report submission`);
+      console.log(`  Report ID: ${reportId}`);
+      console.log(`  Report Title: ${reportTitle}`);
+      console.log(`  Facility: ${facility.name}`);
+      console.log(`  District: ${facility.district?.name || 'Unknown'}`);
+      console.log(`  Recipients:`, dafUsers.map((u: typeof users.$inferSelect) => `${u.name} (${u.email})`).join(', '));
+      
+      // TODO: Implement actual notification mechanism with facility context
+      // Example: await emailService.send({
+      //   to: dafUsers.map(u => u.email),
+      //   subject: `New Financial Report Pending Your Approval: ${reportTitle}`,
+      //   body: `A new financial report "${reportTitle}" from ${facility.name} (${facility.district?.name}) has been submitted and requires your review.`
+      // });
+      
+    } catch (error) {
+      console.error(`Failed to notify DAF users for facility ${facilityId}:`, error);
+      // Don't throw - notification failures shouldn't block workflow
+    }
+  }
+
+  /**
    * Notifies all DG users when a report is approved by DAF
    * Requirements: 2.4
+   * @deprecated Use notifyDgUsersForFacility instead for hierarchy-aware routing
    */
   async notifyDgUsers(reportId: number, reportTitle: string): Promise<void> {
     try {
@@ -87,6 +166,81 @@ export class NotificationService {
       
     } catch (error) {
       console.error(`Failed to notify DG users for report ${reportId}:`, error);
+      // Don't throw - notification failures shouldn't block workflow
+    }
+  }
+
+  /**
+   * Notifies DG users at the correct hospital based on facility hierarchy
+   * Requirements: 2.4, 3.2, 9.1-9.5
+   */
+  async notifyDgUsersForFacility(facilityId: number, reportId: number, reportTitle: string): Promise<void> {
+    try {
+      // Get facility details for context
+      const facility = await db.query.facilities.findFirst({
+        where: eq(facilities.id, facilityId),
+        columns: {
+          id: true,
+          name: true,
+          districtId: true,
+        },
+        with: {
+          district: {
+            columns: {
+              name: true,
+            }
+          }
+        }
+      });
+
+      if (!facility) {
+        console.error(`Facility ${facilityId} not found for notification`);
+        return;
+      }
+
+      // Get DG users for this facility's approval chain
+      const dgUsers = await FacilityHierarchyService.getDgUsersForFacility(facilityId);
+
+      if (dgUsers.length === 0) {
+        console.warn(`No DG users found for facility ${facilityId} (${facility.name})`);
+        // Fallback to admin users if no DG users found (Requirement 9.5)
+        const adminUsers = await db.query.users.findMany({
+          where: eq(users.role, 'admin'),
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        });
+        
+        if (adminUsers.length > 0) {
+          console.log(`[NOTIFICATION] Falling back to ${adminUsers.length} admin user(s)`);
+          console.log(`  Report ID: ${reportId}`);
+          console.log(`  Report Title: ${reportTitle}`);
+          console.log(`  Facility: ${facility.name}`);
+          console.log(`  District: ${facility.district?.name || 'Unknown'}`);
+          console.log(`  Recipients:`, adminUsers.map(u => `${u.name} (${u.email})`).join(', '));
+        }
+        return;
+      }
+
+      // Log notification (in production, this would send emails/push notifications)
+      console.log(`[NOTIFICATION] Notifying ${dgUsers.length} DG user(s) about DAF approval`);
+      console.log(`  Report ID: ${reportId}`);
+      console.log(`  Report Title: ${reportTitle}`);
+      console.log(`  Facility: ${facility.name}`);
+      console.log(`  District: ${facility.district?.name || 'Unknown'}`);
+      console.log(`  Recipients:`, dgUsers.map((u: typeof users.$inferSelect) => `${u.name} (${u.email})`).join(', '));
+      
+      // TODO: Implement actual notification mechanism with facility context
+      // Example: await emailService.send({
+      //   to: dgUsers.map(u => u.email),
+      //   subject: `Financial Report Approved by DAF - Final Approval Required: ${reportTitle}`,
+      //   body: `The financial report "${reportTitle}" from ${facility.name} (${facility.district?.name}) has been approved by DAF and requires your final approval.`
+      // });
+      
+    } catch (error) {
+      console.error(`Failed to notify DG users for facility ${facilityId}:`, error);
       // Don't throw - notification failures shouldn't block workflow
     }
   }

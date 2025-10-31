@@ -6,7 +6,7 @@ export const authResponseSchema = z.object({
       id: z.string(),
       name: z.string(),
       email: z.string(),
-      role: z.enum(['accountant', 'admin', 'program_manager']),
+      role: z.enum(['accountant', 'admin', 'program_manager', 'daf', 'dg']),
       facilityId: z.number().nullable(),
       permissions: z.array(z.string()).default([]),
       projectAccess: z.array(z.number()).default([]),

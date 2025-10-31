@@ -15,7 +15,7 @@ import type { ReportStatus } from "@/types/financial-reports-approval";
 interface FinancialReportStatusCardProps {
   reportId: number | null;
   projectType: "HIV" | "Malaria" | "TB";
-  statementType: "revenue-expenditure" | "assets-liabilities";
+  statementType: "revenue-expenditure" | "assets-liabilities" | "cash-flow" | "net-assets-changes" | "budget-vs-actual";
   reportingPeriodId: number;
   onStatusChange?: (newStatus: string) => void;
   onReportCreated?: (reportId: number) => void;
@@ -126,6 +126,9 @@ export function FinancialReportStatusCard({
     const statementCodeMap = {
       "revenue-expenditure": "REV_EXP",
       "assets-liabilities": "ASSETS_LIAB",
+      "cash-flow": "CASH_FLOW",
+      "net-assets-changes": "NET_ASSETS_CHANGES",
+      "budget-vs-actual": "BUDGET_VS_ACTUAL",
     } as const;
 
     createReport({

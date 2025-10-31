@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { transformBudgetVsActualData } from '../utils/transform-statement-data';
 import { FacilitySelectorWithAll } from '@/components/facility-selector-with-all';
 import { Label } from '@/components/ui/label';
+import { FinancialReportStatusCard } from '@/components/reports/financial-report-status-card';
+import { useGetReportId } from '@/hooks/queries/financial-reports';
 
 // Project configuration
 const projectTabs: FilterTab[] = [
@@ -50,6 +52,19 @@ const TabContent = ({
     'hiv': 'HIV',
     'malaria': 'Malaria',
     'tb': 'TB'
+  };
+
+  // Fetch the report ID for this project and period
+  const { data: reportId, refetch: refetchReportId } = useGetReportId({
+    reportingPeriodId: periodId,
+    projectType: projectTypeMapping[tabValue],
+    statementType: "budget-vs-actual",
+    enabled: !!periodId,
+  });
+
+  // Handle report creation - refetch the report ID
+  const handleReportCreated = () => {
+    refetchReportId();
   };
 
   const { mutate: generateStatement, isPending, isError, error } = useGenerateStatement({
@@ -151,7 +166,22 @@ const TabContent = ({
   // Transform API data to component format
   const transformedData = transformBudgetVsActualData(statementData.lines ?? []);
 
-  return <BudgetVsActualStatement initialData={transformedData} />
+  return (
+    <div className="flex gap-4">
+      <div className="flex-1">
+        <BudgetVsActualStatement initialData={transformedData} />
+      </div>
+      <div className="w-80">
+        <FinancialReportStatusCard
+          reportId={reportId ?? null}
+          projectType={projectTypeMapping[tabValue]}
+          statementType="budget-vs-actual"
+          reportingPeriodId={periodId}
+          onReportCreated={handleReportCreated}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function BudgetVsActualPage() {

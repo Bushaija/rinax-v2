@@ -16,6 +16,8 @@ import type {
   PatchRoute,
   RemoveRoute,
   GenerateStatementRoute,
+  GetDafQueueRoute,
+  GetDgQueueRoute,
   SubmitForApprovalRoute,
   DafApproveRoute,
   DafRejectRoute,
@@ -41,19 +43,63 @@ import {
   FinancialStatementResponse
 } from "@/lib/statement-engine/types/core.types";
 import { reportingPeriods, facilities, districts, provinces } from "@/api/db/schema";
-import { getUserContext, canAccessFacility, type UserContext } from "@/lib/utils/get-user-facility";
 import { buildFacilityFilter } from "@/api/lib/utils/query-filters";
 import { BudgetVsActualProcessor } from "./budget-vs-actual-processor";
 import { CarryforwardService } from "@/lib/statement-engine/services/carryforward-service";
 import type { WorkingCapitalCalculationResult } from "@/lib/statement-engine/services/working-capital-calculator";
 import { snapshotService } from "@/lib/services/snapshot-service";
 import { notificationService } from "@/lib/services/notification.service";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { canAccessFacility } from "@/api/lib/utils/get-user-facility";
+import { getUserContext } from "@/api/lib/utils/get-user-facility";
+import { UserContext } from "@/api/lib/utils/get-user-facility";
+import { UserContext } from "@/api/lib/utils/get-user-facility";
 
 
 export const list: AppRouteHandler<ListRoute> = async (c) => {
   try {
-    // Get user context with district information
-    const userContext = await getUserContext(c);
+    // Get accessible facility IDs from middleware context (injected by facilityHierarchyMiddleware)
+    const accessibleFacilityIds = c.get('accessibleFacilityIds') || [];
+    const user = c.get('user');
+
+    // Require authentication
+    if (!user) {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
+
+    // Check if user has access to any facilities
+    if (accessibleFacilityIds.length === 0) {
+      return c.json({
+        reports: [],
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        summary: { totalReports: 0, byType: {}, byFiscalYear: {}, byProject: {} },
+        message: "No accessible facilities found for user"
+      }, HttpStatusCodes.FORBIDDEN);
+    }
 
     const query = c.req.query();
     
@@ -75,32 +121,22 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
 
     const conditions = [];
 
-    // Add facility filter based on user's district
-    // Get list of facility IDs the user can access
-    const accessibleFacilityIds = await db
-      .select({ id: facilities.id })
-      .from(facilities)
-      .where(eq(facilities.districtId, userContext.districtId));
-    
-    const facilityIds = accessibleFacilityIds.map(f => f.id);
-    
+    // Add facility filter based on hierarchy access control
     // If a specific facility is requested, check if user has access
     if (facilityId && facilityId > 0) {
-      if (!facilityIds.includes(facilityId)) {
+      if (!accessibleFacilityIds.includes(facilityId)) {
         return c.json({
           reports: [],
           pagination: { page, limit, total: 0, totalPages: 0 },
           summary: { totalReports: 0, byType: {}, byFiscalYear: {}, byProject: {} },
-          message: "Access denied: facility not in your district"
+          message: "Access denied: facility not in your hierarchy"
         }, HttpStatusCodes.FORBIDDEN);
       }
       // Filter by the specific facility
       conditions.push(eq(financialReports.facilityId, facilityId));
     } else {
-      // Filter by all accessible facilities
-      if (facilityIds.length > 0) {
-        conditions.push(sql`${financialReports.facilityId} IN (${sql.join(facilityIds.map(id => sql`${id}`), sql`, `)})`);
-      }
+      // Filter by all accessible facilities from hierarchy
+      conditions.push(sql`${financialReports.facilityId} IN (${sql.join(accessibleFacilityIds.map(id => sql`${id}`), sql`, `)})`);
     }
 
     if (projectId && projectId > 0) conditions.push(eq(financialReports.projectId, projectId));
@@ -165,10 +201,18 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       workflowLogCounts.map(item => [item.reportId, item.count])
     );
 
-    // Add workflow log count to each report
+    // Add workflow log count and facility hierarchy information to each report
     const reportsWithWorkflowLogCount = reports.map(report => ({
       ...report,
       workflowLogCount: workflowLogCountMap.get(report.id) || 0,
+      // Add facility hierarchy information
+      facilityHierarchy: {
+        isAccessible: accessibleFacilityIds.includes(report.facilityId),
+        facilityType: report.facility?.facilityType,
+        parentFacilityId: report.facility?.parentFacilityId,
+        districtId: report.facility?.districtId,
+        districtName: report.facility?.district?.name,
+      },
     }));
 
     // Generate summary statistics
@@ -219,20 +263,7 @@ export const list: AppRouteHandler<ListRoute> = async (c) => {
       summary,
     });
   } catch (error: any) {
-    if (error.message === "Unauthorized") {
-      return c.json(
-        { message: "Authentication required" },
-        HttpStatusCodes.UNAUTHORIZED
-      );
-    }
-
-    if (error.message === "User not associated with a facility") {
-      return c.json(
-        { message: "User must be associated with a facility" },
-        HttpStatusCodes.FORBIDDEN
-      );
-    }
-
+    console.error('Error fetching financial reports:', error);
     return c.json(
       { message: "Failed to fetch financial reports", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
@@ -245,8 +276,17 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
   const reportId = parseInt(id);
 
   try {
-    // Get user context with district information
-    const userContext = await getUserContext(c);
+    // Get accessible facility IDs from middleware context
+    const accessibleFacilityIds = c.get('accessibleFacilityIds') || [];
+    const user = c.get('user');
+
+    // Require authentication
+    if (!user) {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
 
     const report = await db.query.financialReports.findFirst({
       where: eq(financialReports.id, reportId),
@@ -262,6 +302,8 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
         updater: true,
         submitter: true,
         approver: true,
+        dafApprover: true,
+        dgApprover: true,
       },
     });
 
@@ -271,13 +313,10 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
       }, HttpStatusCodes.NOT_FOUND);
     }
 
-    // Validate that the user can access this report's facility
-    const recordFacilityId = report.facilityId;
-    const hasAccess = canAccessFacility(recordFacilityId, userContext);
-
-    if (!hasAccess) {
+    // Validate facility access using hierarchy
+    if (!accessibleFacilityIds.includes(report.facilityId)) {
       return c.json(
-        { message: "Access denied: facility not in your district" },
+        { message: "Access denied: facility not in your hierarchy" },
         HttpStatusCodes.FORBIDDEN
       );
     }
@@ -313,29 +352,36 @@ export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
         return c.json({
           ...report,
           snapshotCorrupted: true,
-          snapshotError: "Snapshot integrity check failed. Report data may be corrupted."
+          snapshotError: "Snapshot integrity check failed. Report data may be corrupted.",
+          // Add facility hierarchy information
+          facilityHierarchy: {
+            isAccessible: accessibleFacilityIds.includes(report.facilityId),
+            facilityType: report.facility?.facilityType,
+            parentFacilityId: report.facility?.parentFacilityId,
+            districtId: report.facility?.districtId,
+            districtName: report.facility?.district?.name,
+          },
         }, HttpStatusCodes.OK);
       }
     }
 
-    return c.json(report, HttpStatusCodes.OK);
+    // Add facility hierarchy information to response
+    const reportWithHierarchy = {
+      ...report,
+      facilityHierarchy: {
+        isAccessible: accessibleFacilityIds.includes(report.facilityId),
+        facilityType: report.facility?.facilityType,
+        parentFacilityId: report.facility?.parentFacilityId,
+        districtId: report.facility?.districtId,
+        districtName: report.facility?.district?.name,
+      },
+    };
+
+    return c.json(reportWithHierarchy, HttpStatusCodes.OK);
   } catch (error: any) {
-    if (error.message === "Unauthorized") {
-      return c.json(
-        { message: "Authentication required" },
-        HttpStatusCodes.UNAUTHORIZED
-      );
-    }
-
-    if (error.message === "User not associated with a facility") {
-      return c.json(
-        { message: "User must be associated with a facility" },
-        HttpStatusCodes.FORBIDDEN
-      );
-    }
-
+    console.error('Error fetching financial report:', error);
     return c.json(
-      { message: "Failed to fetch financial report" },
+      { message: "Failed to fetch financial report", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
     );
   }
@@ -346,8 +392,17 @@ export const patch: AppRouteHandler<PatchRoute> = async (c) => {
   const reportId = parseInt(id);
 
   try {
-    // Get user context with district information
-    const userContext = await getUserContext(c);
+    // Get accessible facility IDs from middleware context
+    const accessibleFacilityIds = c.get('accessibleFacilityIds') || [];
+    const user = c.get('user');
+
+    // Require authentication
+    if (!user) {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
 
     // First, fetch the report to check its facility and lock status
     const report = await db.query.financialReports.findFirst({
@@ -360,13 +415,10 @@ export const patch: AppRouteHandler<PatchRoute> = async (c) => {
       }, HttpStatusCodes.NOT_FOUND);
     }
 
-    // Validate that the user can access this report's facility
-    const recordFacilityId = report.facilityId;
-    const hasAccess = canAccessFacility(recordFacilityId, userContext);
-
-    if (!hasAccess) {
+    // Validate facility access using hierarchy
+    if (!accessibleFacilityIds.includes(report.facilityId)) {
       return c.json(
-        { message: "Access denied: facility not in your district" },
+        { message: "Access denied: facility not in your hierarchy" },
         HttpStatusCodes.FORBIDDEN
       );
     }
@@ -394,7 +446,7 @@ export const patch: AppRouteHandler<PatchRoute> = async (c) => {
     const updatedReports = await db.update(financialReports)
       .set({
         ...body,
-        updatedBy: userContext.userId,
+        updatedBy: parseInt(user.id),
         updatedAt: new Date(),
       })
       .where(eq(financialReports.id, reportId))
@@ -426,22 +478,21 @@ export const patch: AppRouteHandler<PatchRoute> = async (c) => {
       },
     });
 
-    return c.json(updatedReport, HttpStatusCodes.OK);
+    // Add facility hierarchy information to response
+    const reportWithHierarchy = {
+      ...updatedReport,
+      facilityHierarchy: {
+        isAccessible: accessibleFacilityIds.includes(updatedReport!.facilityId),
+        facilityType: updatedReport?.facility?.facilityType,
+        parentFacilityId: updatedReport?.facility?.parentFacilityId,
+        districtId: updatedReport?.facility?.districtId,
+        districtName: updatedReport?.facility?.district?.name,
+      },
+    };
+
+    return c.json(reportWithHierarchy, HttpStatusCodes.OK);
   } catch (error: any) {
-    if (error.message === "Unauthorized") {
-      return c.json(
-        { message: "Authentication required" },
-        HttpStatusCodes.UNAUTHORIZED
-      );
-    }
-
-    if (error.message === "User not associated with a facility") {
-      return c.json(
-        { message: "User must be associated with a facility" },
-        HttpStatusCodes.FORBIDDEN
-      );
-    }
-
+    console.error('Error updating financial report:', error);
     return c.json(
       { message: "Failed to update financial report", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
@@ -454,8 +505,17 @@ export const remove: AppRouteHandler<RemoveRoute> = async (c) => {
   const reportId = parseInt(id);
 
   try {
-    // Get user context with district information
-    const userContext = await getUserContext(c);
+    // Get accessible facility IDs from middleware context
+    const accessibleFacilityIds = c.get('accessibleFacilityIds') || [];
+    const user = c.get('user');
+
+    // Require authentication
+    if (!user) {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
 
     // First, fetch the report to check its facility
     const report = await db.query.financialReports.findFirst({
@@ -468,13 +528,10 @@ export const remove: AppRouteHandler<RemoveRoute> = async (c) => {
       }, HttpStatusCodes.NOT_FOUND);
     }
 
-    // Validate that the user can access this report's facility
-    const recordFacilityId = report.facilityId;
-    const hasAccess = canAccessFacility(recordFacilityId, userContext);
-
-    if (!hasAccess) {
+    // Validate facility access using hierarchy
+    if (!accessibleFacilityIds.includes(report.facilityId)) {
       return c.json(
-        { message: "Access denied: facility not in your district" },
+        { message: "Access denied: facility not in your hierarchy" },
         HttpStatusCodes.FORBIDDEN
       );
     }
@@ -491,22 +548,9 @@ export const remove: AppRouteHandler<RemoveRoute> = async (c) => {
     }
     return c.body(null, HttpStatusCodes.NO_CONTENT);
   } catch (error: any) {
-    if (error.message === "Unauthorized") {
-      return c.json(
-        { message: "Authentication required" },
-        HttpStatusCodes.UNAUTHORIZED
-      );
-    }
-
-    if (error.message === "User not associated with a facility") {
-      return c.json(
-        { message: "User must be associated with a facility" },
-        HttpStatusCodes.FORBIDDEN
-      );
-    }
-
+    console.error('Error deleting financial report:', error);
     return c.json(
-      { message: "Failed to delete financial report" },
+      { message: "Failed to delete financial report", error: error.message },
       HttpStatusCodes.INTERNAL_SERVER_ERROR
     );
   }
@@ -517,8 +561,18 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
   let requestBody: any = {};
 
   try {
-    // Get user context with district information
-    const userContext = await getUserContext(c);
+    // Get accessible facility IDs from middleware context
+    const accessibleFacilityIds = c.get('accessibleFacilityIds') || [];
+    const user = c.get('user');
+    const userFacility = c.get('userFacility');
+
+    // Require authentication
+    if (!user) {
+      return c.json(
+        { message: "Authentication required" },
+        HttpStatusCodes.UNAUTHORIZED
+      );
+    }
 
     // Parse and validate request body
     requestBody = await c.req.json();
@@ -556,13 +610,10 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
         }, HttpStatusCodes.NOT_FOUND);
       }
 
-      // Validate that the user can access this report's facility
-      const recordFacilityId = report.facilityId;
-      const hasAccess = canAccessFacility(recordFacilityId, userContext);
-
-      if (!hasAccess) {
+      // Validate facility access using hierarchy
+      if (!accessibleFacilityIds.includes(report.facilityId)) {
         return c.json(
-          { message: "Access denied: facility not in your district" },
+          { message: "Access denied: facility not in your hierarchy" },
           HttpStatusCodes.FORBIDDEN
         );
       }
@@ -667,28 +718,12 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
     }
 
     // NEW: Integrate aggregation level determination (Subtask 5.2)
-    // Determine effective facility IDs based on aggregation level
+    // Determine effective facility IDs based on aggregation level using hierarchy context
     let effectiveFacilityIds: number[];
-    try {
-      effectiveFacilityIds = await determineEffectiveFacilityIds(
-        aggregationLevel,
-        requestedFacilityId,
-        userContext
-      );
-    } catch (error: any) {
-      // Handle validation errors and access control failures (Subtask 5.2)
-      if (error.message === 'facilityId is required when aggregationLevel is FACILITY') {
-        return c.json({
-          message: error.message,
-          context: {
-            aggregationLevel,
-            statementCode,
-            reportingPeriodId
-          }
-        }, HttpStatusCodes.BAD_REQUEST);
-      }
-      
-      if (error.message === 'Access denied to facility') {
+    
+    // Validate requested facility access if specified
+    if (requestedFacilityId) {
+      if (!accessibleFacilityIds.includes(requestedFacilityId)) {
         return c.json({
           message: 'Access denied to facility',
           context: {
@@ -699,14 +734,29 @@ export const generateStatement: AppRouteHandler<GenerateStatementRoute> = async 
           }
         }, HttpStatusCodes.FORBIDDEN);
       }
-      
-      // Re-throw unexpected errors
-      throw error;
+    }
+    
+    // Determine effective facility IDs based on aggregation level
+    if (aggregationLevel === 'FACILITY') {
+      if (!requestedFacilityId) {
+        return c.json({
+          message: 'facilityId is required when aggregationLevel is FACILITY',
+          context: {
+            aggregationLevel,
+            statementCode,
+            reportingPeriodId
+          }
+        }, HttpStatusCodes.BAD_REQUEST);
+      }
+      effectiveFacilityIds = [requestedFacilityId];
+    } else {
+      // For DISTRICT or PROVINCE level, use all accessible facilities
+      effectiveFacilityIds = accessibleFacilityIds;
     }
     
     // For backward compatibility, use the first facility ID as the primary facilityId
     // This maintains compatibility with existing code that expects a single facilityId
-    const primaryFacilityId = effectiveFacilityIds.length > 0 ? effectiveFacilityIds[0] : userContext.facilityId;
+    const primaryFacilityId = effectiveFacilityIds.length > 0 ? effectiveFacilityIds[0] : (userFacility || undefined);
 
     // Initialize the three engines
     const templateEngine = new TemplateEngine(db);

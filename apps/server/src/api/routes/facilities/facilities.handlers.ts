@@ -6,7 +6,7 @@ import { db } from "@/api/db";
 import { facilities, schemaFormDataEntries, projects, reportingPeriods, districts } from "@/api/db/schema";
 import { getCurrentFiscalQuarter } from "@/lib/utils";
 import { validateReportingPeriod } from "./reporting-period-validation";
-import type { ListRoute, GetOneRoute, GetByNameRoute, GetByDistrictRoute, GetPlannedRoute, GetExecutionRoute, GetAllRoute } from "./facilities.routes";
+import type { ListRoute, GetOneRoute, GetByNameRoute, GetByDistrictRoute, GetPlannedRoute, GetExecutionRoute, GetAllRoute, GetAccessibleRoute, GetHierarchyRoute } from "./facilities.routes";
 
 // Helper function to get active reporting period
 async function getActiveReportingPeriod() {
@@ -606,4 +606,145 @@ export const getAll: AppRouteHandler<GetAllRoute> = async (c) => {
     );
 
     return c.json(accessibleFacilities, HttpStatusCodes.OK);
+};
+
+export const getAccessible: AppRouteHandler<GetAccessibleRoute> = async (c) => {
+    // Import FacilityHierarchyService
+    const { FacilityHierarchyService } = await import("../../services/facility-hierarchy.service");
+    const { auth } = await import("@/lib/auth");
+    
+    // Get authenticated user
+    const session = await auth.api.getSession({
+        headers: c.req.raw.headers,
+    });
+
+    if (!session?.user) {
+        return c.json(
+            { message: "Unauthorized" },
+            HttpStatusCodes.UNAUTHORIZED
+        );
+    }
+
+    const userId = parseInt(session.user.id);
+
+    // Get accessible facility IDs using the hierarchy service
+    const accessibleFacilityIds = await FacilityHierarchyService.getAccessibleFacilityIds(userId);
+
+    // Query facilities with district information
+    const accessibleFacilities = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+            facilityType: facilities.facilityType,
+            districtId: facilities.districtId,
+            districtName: districts.name,
+            parentFacilityId: facilities.parentFacilityId,
+        })
+        .from(facilities)
+        .innerJoin(districts, eq(facilities.districtId, districts.id))
+        .where(inArray(facilities.id, accessibleFacilityIds))
+        .orderBy(asc(districts.name), asc(facilities.name));
+
+    return c.json(accessibleFacilities, HttpStatusCodes.OK);
+};
+
+export const getHierarchy: AppRouteHandler<GetHierarchyRoute> = async (c) => {
+    // Import required services
+    const { FacilityHierarchyService } = await import("../../services/facility-hierarchy.service");
+    const { auth } = await import("@/lib/auth");
+    
+    // Get authenticated user
+    const session = await auth.api.getSession({
+        headers: c.req.raw.headers,
+    });
+
+    if (!session?.user) {
+        return c.json(
+            { message: "Unauthorized" },
+            HttpStatusCodes.UNAUTHORIZED
+        );
+    }
+
+    const userId = parseInt(session.user.id);
+    const { id } = c.req.param();
+    const facilityId = parseInt(id);
+
+    // Check if user can access this facility
+    const canAccess = await FacilityHierarchyService.canAccessFacility(userId, facilityId);
+    
+    if (!canAccess) {
+        return c.json(
+            { message: "Access denied: You do not have permission to view this facility" },
+            HttpStatusCodes.FORBIDDEN
+        );
+    }
+
+    // Get the facility with district information
+    const facility = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+            facilityType: facilities.facilityType,
+            districtId: facilities.districtId,
+            districtName: districts.name,
+            parentFacilityId: facilities.parentFacilityId,
+        })
+        .from(facilities)
+        .innerJoin(districts, eq(facilities.districtId, districts.id))
+        .where(eq(facilities.id, facilityId))
+        .limit(1);
+
+    if (!facility || facility.length === 0) {
+        return c.json(
+            { message: "Facility not found" },
+            HttpStatusCodes.NOT_FOUND
+        );
+    }
+
+    const facilityData = facility[0];
+
+    // Get parent facility if exists
+    let parentFacility = null;
+    if (facilityData.parentFacilityId) {
+        const parent = await db
+            .select({
+                id: facilities.id,
+                name: facilities.name,
+                facilityType: facilities.facilityType,
+                districtId: facilities.districtId,
+            })
+            .from(facilities)
+            .where(eq(facilities.id, facilityData.parentFacilityId))
+            .limit(1);
+        
+        if (parent && parent.length > 0) {
+            parentFacility = parent[0];
+        }
+    }
+
+    // Get child facilities
+    const childFacilities = await db
+        .select({
+            id: facilities.id,
+            name: facilities.name,
+            facilityType: facilities.facilityType,
+            districtId: facilities.districtId,
+        })
+        .from(facilities)
+        .where(
+            and(
+                eq(facilities.parentFacilityId, facilityId),
+                eq(facilities.districtId, facilityData.districtId)
+            )
+        )
+        .orderBy(asc(facilities.name));
+
+    return c.json(
+        {
+            facility: facilityData,
+            parentFacility,
+            childFacilities,
+        },
+        HttpStatusCodes.OK
+    );
 };

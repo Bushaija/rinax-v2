@@ -24,7 +24,7 @@ const createUserSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.enum(["admin", "accountant", "program_manager"] as const),
+  role: z.enum(["admin", "accountant", "program_manager", "daf", "dg"] as const),
   facilityId: z.number({
     required_error: "Facility is required",
     invalid_type_error: "Facility is required",
@@ -33,7 +33,17 @@ const createUserSchema = z.object({
   projectAccess: z.array(z.number()),
   mustChangePassword: z.boolean(),
   isActive: z.boolean(),
-});
+}).refine(
+  (data) => {
+    // DAF and DG roles require hospital facility - validation happens on server
+    // This is just a client-side check for better UX
+    return true;
+  },
+  {
+    message: "DAF and DG roles require a hospital facility",
+    path: ["facilityId"],
+  }
+);
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 

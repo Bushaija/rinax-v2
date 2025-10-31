@@ -5,6 +5,8 @@ import { requestId } from "hono/request-id";
 import { notFound, onError, serveEmojiFavicon } from "stoker/middlewares";
 import { defaultHook } from "stoker/openapi";
 import { auth } from "./auth";
+import { getSessionMiddleware } from "../middlewares/auth";
+import { facilityHierarchyMiddleware } from "../middlewares/facility-hierarchy";
 
 // import { pinoLogger } from "../middlewares/pino-logger";
 
@@ -42,6 +44,8 @@ export default function createApp() {
     .use(requestId())
     .use(serveEmojiFavicon("📝"))
     // .use(pinoLogger());
+    .use("*", getSessionMiddleware)
+    .use("*", facilityHierarchyMiddleware)
   
   .on(["POST", "GET"], "/auth/*", async (c) => {
     return auth?.handler(c.req.raw);

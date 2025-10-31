@@ -9,6 +9,7 @@ import { notificationService } from "./notification.service";
 import { SnapshotService } from "@/lib/services/snapshot-service";
 import { VersionService } from "@/lib/services/version-service";
 import { PeriodLockService } from "@/lib/services/period-lock-service";
+import { FacilityHierarchyService } from "../../services/facility-hierarchy.service";
 
 export interface WorkflowValidationResult {
   allowed: boolean;
@@ -71,7 +72,7 @@ export class FinancialReportWorkflowService {
 
   /**
    * Validates if a DAF can approve a report
-   * Requirements: 2.1, 4.2
+   * Requirements: 2.1, 4.2, 3.1-3.5
    */
   async canDafApprove(reportId: number, userId: number): Promise<WorkflowValidationResult> {
     const report = await db.query.financialReports.findFirst({
@@ -103,6 +104,15 @@ export class FinancialReportWorkflowService {
       return { allowed: false, reason: 'Only DAF users can approve at this stage' };
     }
 
+    // Validate hierarchy access - DAF must be able to access the report's facility
+    const canApprove = await this.canApproveReport(userId, reportId);
+    if (!canApprove) {
+      return { 
+        allowed: false, 
+        reason: 'Cannot approve report: Facility is outside your approval scope' 
+      };
+    }
+
     return { allowed: true };
   }
 
@@ -117,7 +127,7 @@ export class FinancialReportWorkflowService {
 
   /**
    * Validates if a DG can approve a report
-   * Requirements: 3.1, 4.3
+   * Requirements: 3.1, 4.3, 3.1-3.5
    */
   async canDgApprove(reportId: number, userId: number): Promise<WorkflowValidationResult> {
     const report = await db.query.financialReports.findFirst({
@@ -149,6 +159,15 @@ export class FinancialReportWorkflowService {
       return { allowed: false, reason: 'Only DG users can provide final approval' };
     }
 
+    // Validate hierarchy access - DG must be able to access the report's facility
+    const canApprove = await this.canApproveReport(userId, reportId);
+    if (!canApprove) {
+      return { 
+        allowed: false, 
+        reason: 'Cannot approve report: Facility is outside your approval scope' 
+      };
+    }
+
     return { allowed: true };
   }
 
@@ -159,6 +178,33 @@ export class FinancialReportWorkflowService {
   async canDgReject(reportId: number, userId: number): Promise<WorkflowValidationResult> {
     // Same validation as DG approve
     return this.canDgApprove(reportId, userId);
+  }
+
+  /**
+   * Validates if a user can approve a report based on hierarchy
+   * Requirements: 3.1-3.5, 6.5, 5.2, 5.3
+   */
+  async canApproveReport(userId: number, reportId: number): Promise<boolean> {
+    try {
+      // Get the report to find its facility
+      const report = await db.query.financialReports.findFirst({
+        where: eq(financialReports.id, reportId),
+        columns: {
+          facilityId: true,
+        }
+      });
+
+      if (!report || !report.facilityId) {
+        return false;
+      }
+
+      // Check if the user can access the report's facility
+      const canAccess = await FacilityHierarchyService.canAccessFacility(userId, report.facilityId);
+      return canAccess;
+    } catch (error) {
+      console.error('Error validating approval permissions:', error);
+      return false;
+    }
   }
 
   // ============================================================================
@@ -245,8 +291,9 @@ export class FinancialReportWorkflowService {
     // 6. Log the action
     await this.logAction(reportId, 'submitted', userId);
 
-    // 7. Notify DAF users (Requirement 1.4)
-    await notificationService.notifyDafUsers(reportId, updatedReports[0].title);
+    // 7. Notify DAF users at parent hospital (Requirements 1.4, 3.1)
+    // Route to parent hospital DAF users for health centers, or same hospital for hospitals
+    await notificationService.notifyDafUsersForFacility(report.facilityId, reportId, updatedReports[0].title);
 
     return {
       success: true,
@@ -257,13 +304,25 @@ export class FinancialReportWorkflowService {
 
   /**
    * DAF approves a report
-   * Requirements: 2.1-2.4
+   * Requirements: 2.1-2.4, 3.1-3.5
    */
   async dafApprove(reportId: number, userId: number, comment?: string): Promise<WorkflowActionResult> {
-    // Validate action is allowed
+    // Validate action is allowed (includes hierarchy validation)
     const validation = await this.canDafApprove(reportId, userId);
     if (!validation.allowed) {
       throw new Error(validation.reason || 'Cannot approve report');
+    }
+
+    // Get report to find facility
+    const report = await db.query.financialReports.findFirst({
+      where: eq(financialReports.id, reportId),
+      columns: {
+        facilityId: true,
+      }
+    });
+
+    if (!report || !report.facilityId) {
+      throw new Error('Report or facility not found');
     }
 
     // Update report status
@@ -287,8 +346,9 @@ export class FinancialReportWorkflowService {
     // Log the action
     await this.logAction(reportId, 'daf_approved', userId, comment);
 
-    // Notify DG users (Requirement 2.4)
-    await notificationService.notifyDgUsers(reportId, updatedReports[0].title);
+    // Notify DG users at the correct hospital (Requirements 2.4, 3.2)
+    // Route to parent hospital DG users for health centers, or same hospital for hospitals
+    await notificationService.notifyDgUsersForFacility(report.facilityId, reportId, updatedReports[0].title);
 
     return {
       success: true,
@@ -299,7 +359,7 @@ export class FinancialReportWorkflowService {
 
   /**
    * DAF rejects a report
-   * Requirements: 2.5-2.8
+   * Requirements: 2.5-2.8, 3.5, 6.5
    */
   async dafReject(reportId: number, userId: number, comment: string): Promise<WorkflowActionResult> {
     // Validate comment is provided
@@ -307,7 +367,7 @@ export class FinancialReportWorkflowService {
       throw new Error('Rejection comment is required');
     }
 
-    // Validate action is allowed
+    // Validate action is allowed (includes hierarchy validation)
     const validation = await this.canDafReject(reportId, userId);
     if (!validation.allowed) {
       throw new Error(validation.reason || 'Cannot reject report');
@@ -334,7 +394,7 @@ export class FinancialReportWorkflowService {
     // Log the action
     await this.logAction(reportId, 'daf_rejected', userId, comment);
 
-    // Notify report creator (Requirement 2.8)
+    // Notify report creator at original facility (Requirements 2.8, 3.5, 6.5)
     await notificationService.notifyReportCreator(reportId, 'rejected_by_daf', comment);
 
     return {
@@ -349,7 +409,7 @@ export class FinancialReportWorkflowService {
    * Requirements: 3.1-3.5
    */
   async dgApprove(reportId: number, userId: number, comment?: string): Promise<WorkflowActionResult> {
-    // Validate action is allowed
+    // Validate action is allowed (includes hierarchy validation)
     const validation = await this.canDgApprove(reportId, userId);
     if (!validation.allowed) {
       throw new Error(validation.reason || 'Cannot approve report');
@@ -408,7 +468,7 @@ export class FinancialReportWorkflowService {
 
   /**
    * DG rejects a report
-   * Requirements: 3.6-3.8
+   * Requirements: 3.6-3.8, 3.5, 6.5
    */
   async dgReject(reportId: number, userId: number, comment: string): Promise<WorkflowActionResult> {
     // Validate comment is provided
@@ -416,7 +476,7 @@ export class FinancialReportWorkflowService {
       throw new Error('Rejection comment is required');
     }
 
-    // Validate action is allowed
+    // Validate action is allowed (includes hierarchy validation)
     const validation = await this.canDgReject(reportId, userId);
     if (!validation.allowed) {
       throw new Error(validation.reason || 'Cannot reject report');
@@ -443,7 +503,7 @@ export class FinancialReportWorkflowService {
     // Log the action
     await this.logAction(reportId, 'dg_rejected', userId, comment);
 
-    // Notify report creator (Requirement 3.8)
+    // Notify report creator at original facility (Requirements 3.8, 3.5, 6.5)
     await notificationService.notifyReportCreator(reportId, 'rejected_by_dg', comment);
 
     return {

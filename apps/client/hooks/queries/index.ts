@@ -11,6 +11,7 @@ export { useGetFacilities } from "./facilities/use-get-facilities";
 export { useGetFacilitiesByDistrict } from "./facilities/use-get-facilities-by-district";
 export { useGetFacilityByName } from "./facilities/use-get-facility-by-name";
 export { useGetFacilityById } from "./facilities/use-get-facility-by-id";
+export { useGetAccessibleFacilities } from "./facilities/use-get-accessible-facilities";
 
 // Reporting periods queries
 export { useGetCurrentReportingPeriod } from "./reporting-period/use-get-current-reporting-period";

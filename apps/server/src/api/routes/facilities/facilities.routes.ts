@@ -207,6 +207,83 @@ export const getAll = createRoute({
     }
 });
 
+export const getAccessible = createRoute({
+    path: "/facilities/accessible",
+    method: "get",
+    tags,
+    summary: "Get user's accessible facilities based on role and hierarchy",
+    responses: {
+        [HttpStatusCodes.OK]: jsonContent(
+            z.array(
+                z.object({
+                    id: z.number().int(),
+                    name: z.string(),
+                    facilityType: z.enum(["hospital", "health_center"]),
+                    districtId: z.number().int(),
+                    districtName: z.string(),
+                    parentFacilityId: z.number().int().nullable(),
+                })
+            ),
+            "List of facilities accessible to the current user"
+        ),
+        [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+            z.object({ message: z.string() }),
+            "User not authenticated"
+        ),
+    }
+});
+
+export const getHierarchy = createRoute({
+    path: "/facilities/{id}/hierarchy",
+    method: "get",
+    tags,
+    summary: "Get facility hierarchy showing parent and child facilities",
+    request: {
+        params: IdParamsSchema,
+    },
+    responses: {
+        [HttpStatusCodes.OK]: jsonContent(
+            z.object({
+                facility: z.object({
+                    id: z.number().int(),
+                    name: z.string(),
+                    facilityType: z.enum(["hospital", "health_center"]),
+                    districtId: z.number().int(),
+                    districtName: z.string(),
+                    parentFacilityId: z.number().int().nullable(),
+                }),
+                parentFacility: z.object({
+                    id: z.number().int(),
+                    name: z.string(),
+                    facilityType: z.enum(["hospital", "health_center"]),
+                    districtId: z.number().int(),
+                }).nullable(),
+                childFacilities: z.array(
+                    z.object({
+                        id: z.number().int(),
+                        name: z.string(),
+                        facilityType: z.enum(["hospital", "health_center"]),
+                        districtId: z.number().int(),
+                    })
+                ),
+            }),
+            "Facility hierarchy information"
+        ),
+        [HttpStatusCodes.NOT_FOUND]: jsonContent(
+            notFoundSchema,
+            "Facility not found"
+        ),
+        [HttpStatusCodes.FORBIDDEN]: jsonContent(
+            z.object({ message: z.string() }),
+            "User does not have access to this facility"
+        ),
+        [HttpStatusCodes.UNAUTHORIZED]: jsonContent(
+            z.object({ message: z.string() }),
+            "User not authenticated"
+        ),
+    }
+});
+
 export type GetByDistrictRoute = typeof getByDistrict;
 export type GetByNameRoute = typeof getByName;
 export type ListRoute = typeof list;
@@ -214,3 +291,5 @@ export type GetOneRoute = typeof getOne;
 export type GetPlannedRoute = typeof getPlanned;
 export type GetExecutionRoute = typeof getExecution;
 export type GetAllRoute = typeof getAll;
+export type GetAccessibleRoute = typeof getAccessible;
+export type GetHierarchyRoute = typeof getHierarchy;

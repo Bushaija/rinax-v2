@@ -160,6 +160,18 @@ export const signUp: AppRouteHandler<SignUpRoute> = async (c) => {
       }
     }
 
+    // Validate DAF/DG role assignments using hierarchy validation
+    if (role === 'daf' || role === 'dg') {
+      const { validateRoleFacilityConsistency } = await import('@/lib/utils/hierarchy-validation');
+      try {
+        await validateRoleFacilityConsistency(role, facilityId || null);
+      } catch (error: any) {
+        throw new HTTPException(400, {
+          message: error.message || `${role.toUpperCase()} role validation failed`,
+        });
+      }
+    }
+
     const [district] = await db
       .select({ districtId: schema.facilities.districtId})
       .from(schema.facilities)

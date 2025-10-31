@@ -1,7 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, FileText, Building2, FolderOpen, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, FileText, Building2, FolderOpen, CheckCircle, User } from "lucide-react";
 import { ApprovalStatusBadge } from "./approval-status-badge";
 
 interface DgReviewCardProps {
@@ -15,8 +16,18 @@ interface DgReviewCardProps {
     dafApprovedAt: string | null;
     facility?: {
       name: string;
+      facilityType?: string;
+      district?: {
+        name: string;
+      };
     };
     project?: {
+      name: string;
+    };
+    submitter?: {
+      name: string;
+    };
+    dafApprover?: {
       name: string;
     };
   };
@@ -44,38 +55,85 @@ export function DgReviewCard({ report, onClick }: DgReviewCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="space-y-2">
+          {/* Facility Information with Hierarchy Context */}
           {report.facility && (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground truncate">
-                {report.facility.name}
-              </span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium truncate">
+                  {report.facility.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 ml-6">
+                {report.facility.facilityType && (
+                  <Badge variant="outline" className="text-xs">
+                    {report.facility.facilityType === 'health_center' ? 'Health Center' : 'Hospital'}
+                  </Badge>
+                )}
+                {report.facility.district && (
+                  <span className="text-xs text-muted-foreground">
+                    {report.facility.district.name}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
-          {report.project && (
-            <div className="flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground truncate">
-                {report.project.name}
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">FY {report.fiscalYear}</span>
-          </div>
-
+          {/* DAF Approval Information */}
           {report.dafApprovedAt && (
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-              <span className="text-muted-foreground text-xs">
-                DAF {new Date(report.dafApprovedAt).toLocaleDateString()}
-              </span>
+            <div className="rounded-lg border bg-green-50 dark:bg-green-950/20 p-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-green-900 dark:text-green-100">
+                    DAF Approved
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
+                    {report.dafApprover && (
+                      <>
+                        <User className="h-3 w-3" />
+                        <span className="truncate">{report.dafApprover.name}</span>
+                        <span>•</span>
+                      </>
+                    )}
+                    <span>
+                      {new Date(report.dafApprovedAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* Additional Details */}
+          <div className="grid grid-cols-2 gap-2 text-sm pt-1">
+            {report.project && (
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground truncate text-xs">
+                  {report.project.name}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground text-xs">FY {report.fiscalYear}</span>
+            </div>
+
+            {report.submitter && (
+              <div className="flex items-center gap-2 col-span-2">
+                <span className="text-xs text-muted-foreground">
+                  Submitted by {report.submitter.name}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -62,6 +62,18 @@ export const createUserAccount: AppRouteHandler<CreateUserAccountRoute> = async 
       await ValidationService.validateProjectAccess(projectAccess);
     }
 
+    // Validate DAF/DG role assignments using hierarchy validation
+    if (role === 'daf' || role === 'dg') {
+      const { validateRoleFacilityConsistency } = await import('@/lib/utils/hierarchy-validation');
+      try {
+        await validateRoleFacilityConsistency(role, facilityId || null);
+      } catch (error: any) {
+        throw new HTTPException(400, {
+          message: error.message || `${role.toUpperCase()} role validation failed`,
+        });
+      }
+    }
+
     const temporaryPassword = generateTemporaryPassword()
 
     const result = await auth?.api.createUser({
@@ -303,6 +315,21 @@ export const updateUser: AppRouteHandler<UpdateUserRoute> = async (c) => {
       })
       if (!facility) {
         throw new HTTPException(400, { message: 'Invalid facility ID' })
+      }
+    }
+
+    // Validate DAF/DG role assignments using hierarchy validation
+    const roleToValidate = updates.role || existingUser.role;
+    const facilityToValidate = updates.facilityId !== undefined ? updates.facilityId : existingUser.facilityId;
+    
+    if (roleToValidate === 'daf' || roleToValidate === 'dg') {
+      const { validateRoleFacilityConsistency } = await import('@/lib/utils/hierarchy-validation');
+      try {
+        await validateRoleFacilityConsistency(roleToValidate, facilityToValidate);
+      } catch (error: any) {
+        throw new HTTPException(400, {
+          message: error.message || `${roleToValidate.toUpperCase()} role validation failed`,
+        });
       }
     }
 

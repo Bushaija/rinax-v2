@@ -29,7 +29,7 @@ export const signUp = createRoute({
         name: z.string().min(2, "Name must be at least 2 characters"),
         email: z.email("Invalid email address"),
         password: z.string().min(8, "Password must be at least 8 characters"),
-        role: z.enum(['admin', 'accountant', "project_manager"]).optional(),
+        role: z.enum(['admin', 'accountant', "project_manager", 'daf', 'dg']).optional(),
         facilityId: z.number().optional(),
         permissions: z.array(z.string()).optional().default([]),
         projectAccess: z.array(z.number()).optional().default([]),
