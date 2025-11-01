@@ -12,10 +12,10 @@ import { filterAllowedProvinces, type DashboardAccessRights } from "@/lib/dashbo
 
 interface ProvinceTabContainerProps {
   provinceId?: string;
-  programId?: string;
+  projectType?: string;
   quarter?: string;
   onProvinceChange: (value: string) => void;
-  onProgramChange: (value: string) => void;
+  onProjectTypeChange: (value: string) => void;
   onQuarterChange: (value: string) => void;
   onClearFilters: () => void;
   onDistrictClick?: (districtId: number) => void;
@@ -25,10 +25,10 @@ interface ProvinceTabContainerProps {
 
 export function ProvinceTabContainer({
   provinceId,
-  programId,
+  projectType,
   quarter,
   onProvinceChange,
-  onProgramChange,
+  onProjectTypeChange,
   onQuarterChange,
   onClearFilters,
   onDistrictClick,
@@ -72,7 +72,7 @@ export function ProvinceTabContainer({
     {
       level: "province",
       provinceId: provinceId ? Number(provinceId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -106,7 +106,7 @@ export function ProvinceTabContainer({
   } = useGetBudgetByDistrict(
     {
       provinceId: provinceId ? Number(provinceId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -123,7 +123,7 @@ export function ProvinceTabContainer({
   } = useGetProvinceApprovals(
     {
       provinceId: provinceId ? Number(provinceId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -153,12 +153,12 @@ export function ProvinceTabContainer({
   return (
     <ProvinceTab
       provinceId={provinceId}
-      programId={programId}
+      projectType={projectType}
       quarter={quarter}
       provinces={allowedProvinces}
       programs={programs}
       onProvinceChange={onProvinceChange}
-      onProgramChange={onProgramChange}
+      onProjectTypeChange={onProjectTypeChange}
       onQuarterChange={onQuarterChange}
       onClearFilters={onClearFilters}
       metricsData={metricsData}

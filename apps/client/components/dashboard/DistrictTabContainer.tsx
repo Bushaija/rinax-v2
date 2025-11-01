@@ -12,11 +12,11 @@ import { filterAllowedDistricts, type DashboardAccessRights } from "@/lib/dashbo
 
 interface DistrictTabContainerProps {
   districtId?: string;
-  programId?: string;
+  projectType?: string;
   quarter?: string;
   provinceId?: string;
   onDistrictChange: (value: string) => void;
-  onProgramChange: (value: string) => void;
+  onProjectTypeChange: (value: string) => void;
   onQuarterChange: (value: string) => void;
   onClearFilters: () => void;
   onDataLoaded?: () => void;
@@ -25,11 +25,11 @@ interface DistrictTabContainerProps {
 
 export function DistrictTabContainer({
   districtId,
-  programId,
+  projectType,
   quarter,
   provinceId,
   onDistrictChange,
-  onProgramChange,
+  onProjectTypeChange,
   onQuarterChange,
   onClearFilters,
   onDataLoaded,
@@ -85,7 +85,7 @@ export function DistrictTabContainer({
     {
       level: "district",
       districtId: districtId ? Number(districtId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -119,7 +119,7 @@ export function DistrictTabContainer({
   } = useGetBudgetByFacility(
     {
       districtId: districtId ? Number(districtId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -136,7 +136,7 @@ export function DistrictTabContainer({
   } = useGetDistrictApprovals(
     {
       districtId: districtId ? Number(districtId) : 0,
-      programId: programId ? Number(programId) : undefined,
+      projectType: projectType,
       quarter: quarter ? Number(quarter) : undefined,
     },
     {
@@ -189,12 +189,12 @@ export function DistrictTabContainer({
   return (
     <DistrictTab
       districtId={districtId}
-      programId={programId}
+      projectType={projectType}
       quarter={quarter}
       districts={allowedDistricts}
       programs={programs}
       onDistrictChange={onDistrictChange}
-      onProgramChange={onProgramChange}
+      onProjectTypeChange={onProjectTypeChange}
       onQuarterChange={onQuarterChange}
       onClearFilters={onClearFilters}
       metricsData={metricsData}

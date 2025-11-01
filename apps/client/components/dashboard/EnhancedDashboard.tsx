@@ -29,14 +29,14 @@ export function EnhancedDashboard() {
   const urlTab = searchParams.get("tab") as "province" | "district" | null;
   const urlProvinceId = searchParams.get("provinceId");
   const urlDistrictId = searchParams.get("districtId");
-  const urlProgramId = searchParams.get("programId");
+  const urlProjectType = searchParams.get("projectType");
   const urlQuarter = searchParams.get("quarter");
 
   // State
   const [activeTab, setActiveTab] = useState<"province" | "district">("district");
   const [provinceId, setProvinceId] = useState<string | undefined>(undefined);
   const [districtId, setDistrictId] = useState<string | undefined>(undefined);
-  const [programId, setProgramId] = useState<string | undefined>(urlProgramId || undefined);
+  const [projectType, setProjectType] = useState<string | undefined>(urlProjectType || undefined);
   const [quarter, setQuarter] = useState<string | undefined>(urlQuarter || undefined);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -100,11 +100,11 @@ export function EnhancedDashboard() {
     params.set("tab", activeTab);
     if (provinceId) params.set("provinceId", provinceId);
     if (districtId) params.set("districtId", districtId);
-    if (programId) params.set("programId", programId);
+    if (projectType) params.set("projectType", projectType);
     if (quarter) params.set("quarter", quarter);
 
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [isInitialized, activeTab, provinceId, districtId, programId, quarter, router, pathname]);
+  }, [isInitialized, activeTab, provinceId, districtId, projectType, quarter, router, pathname]);
 
   const handleTabChange = useCallback((tab: "province" | "district") => {
     // Validate tab access before changing
@@ -125,8 +125,8 @@ export function EnhancedDashboard() {
     setDistrictId(value);
   }, []);
 
-  const handleProgramChange = useCallback((value: string) => {
-    setProgramId(value);
+  const handleProjectTypeChange = useCallback((value: string) => {
+    setProjectType(value);
   }, []);
 
   const handleQuarterChange = useCallback((value: string) => {
@@ -139,7 +139,7 @@ export function EnhancedDashboard() {
     } else {
       setDistrictId(undefined);
     }
-    setProgramId(undefined);
+    setProjectType(undefined);
     setQuarter(undefined);
   }, [activeTab]);
 
@@ -225,10 +225,10 @@ export function EnhancedDashboard() {
         <ProvinceTabContainer
           key={`province-${refreshTrigger}`}
           provinceId={provinceId}
-          programId={programId}
+          projectType={projectType}
           quarter={quarter}
           onProvinceChange={handleProvinceChange}
-          onProgramChange={handleProgramChange}
+          onProjectTypeChange={handleProjectTypeChange}
           onQuarterChange={handleQuarterChange}
           onClearFilters={handleClearFilters}
           onDistrictClick={handleDistrictClick}
@@ -240,10 +240,10 @@ export function EnhancedDashboard() {
           key={`district-${refreshTrigger}`}
           districtId={districtId}
           provinceId={provinceId}
-          programId={programId}
+          projectType={projectType}
           quarter={quarter}
           onDistrictChange={handleDistrictChange}
-          onProgramChange={handleProgramChange}
+          onProjectTypeChange={handleProjectTypeChange}
           onQuarterChange={handleQuarterChange}
           onClearFilters={handleClearFilters}
           onDataLoaded={handleDataLoaded}

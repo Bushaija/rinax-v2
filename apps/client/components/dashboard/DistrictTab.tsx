@@ -20,7 +20,7 @@ import type { DashboardAccessRights } from "@/lib/dashboard-access-control";
 interface DistrictTabProps {
   // Filter state
   districtId?: string;
-  programId?: string;
+  projectType?: string;
   quarter?: string;
 
   // Filter options
@@ -29,7 +29,7 @@ interface DistrictTabProps {
 
   // Filter handlers
   onDistrictChange: (value: string) => void;
-  onProgramChange: (value: string) => void;
+  onProjectTypeChange: (value: string) => void;
   onQuarterChange: (value: string) => void;
   onClearFilters: () => void;
 
@@ -91,12 +91,12 @@ interface DistrictTabProps {
 
 export function DistrictTab({
   districtId,
-  programId,
+  projectType,
   quarter,
   districts,
   programs,
   onDistrictChange,
-  onProgramChange,
+  onProjectTypeChange,
   onQuarterChange,
   onClearFilters,
   metricsData,
@@ -119,7 +119,7 @@ export function DistrictTab({
 }: DistrictTabProps) {
   console.log("[DistrictTab] Render", {
     districtId,
-    programId,
+    projectType,
     quarter,
     districts: districts.length,
     programs: programs.length,
@@ -144,7 +144,7 @@ export function DistrictTab({
       logDashboardError(parseDashboardError(metricsError), {
         component: "DistrictTab",
         action: "fetchMetrics",
-        params: { districtId, programId, quarter },
+        params: { districtId, projectType, quarter },
       });
     }
     if (programDistributionError) {
@@ -158,14 +158,14 @@ export function DistrictTab({
       logDashboardError(parseDashboardError(budgetByFacilityError), {
         component: "DistrictTab",
         action: "fetchBudgetByFacility",
-        params: { districtId, programId, quarter },
+        params: { districtId, projectType, quarter },
       });
     }
     if (districtApprovalsError) {
       logDashboardError(parseDashboardError(districtApprovalsError), {
         component: "DistrictTab",
         action: "fetchDistrictApprovals",
-        params: { districtId, programId, quarter },
+        params: { districtId, projectType, quarter },
       });
     }
   }, [
@@ -174,7 +174,7 @@ export function DistrictTab({
     budgetByFacilityError,
     districtApprovalsError,
     districtId,
-    programId,
+    projectType,
     quarter,
   ]);
 
@@ -210,9 +210,9 @@ export function DistrictTab({
         districts={districts}
         onDistrictChange={onDistrictChange}
         disableDistrictFilter={!accessRights.canFilterByAnyDistrict}
-        programId={programId}
+        projectType={projectType}
         programs={programs}
-        onProgramChange={onProgramChange}
+        onProjectTypeChange={onProjectTypeChange}
         quarter={quarter}
         onQuarterChange={onQuarterChange}
         onClearFilters={onClearFilters}

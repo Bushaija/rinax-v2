@@ -6,7 +6,7 @@ export function useGetProvinceApprovals(
   options?: Omit<UseQueryOptions<ProvinceApprovalsResponse, Error>, 'queryKey' | 'queryFn'>
 ) {
   return useQuery({
-    queryKey: ["dashboard", "province-approvals", params.provinceId, params.programId, params.quarter],
+    queryKey: ["dashboard", "province-approvals", params.provinceId, params.projectType, params.quarter],
     queryFn: () => getProvinceApprovals(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchInterval: 1000 * 60 * 5, // 5 minutes

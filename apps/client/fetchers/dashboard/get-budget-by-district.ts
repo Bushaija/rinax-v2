@@ -1,6 +1,6 @@
 export interface GetBudgetByDistrictRequest {
   provinceId: string | number;
-  programId?: string | number;
+  projectType?: string;
   quarter?: string | number;
 }
 
@@ -30,8 +30,8 @@ async function getBudgetByDistrict(params: GetBudgetByDistrictRequest): Promise<
   
   queryParams.append('provinceId', params.provinceId.toString());
 
-  if (params.programId) {
-    queryParams.append('programId', params.programId.toString());
+  if (params.projectType) {
+    queryParams.append('projectType', params.projectType);
   }
 
   if (params.quarter) {

@@ -6,7 +6,7 @@ export function useGetDistrictApprovals(
   options?: Omit<UseQueryOptions<DistrictApprovalsResponse, Error>, 'queryKey' | 'queryFn'>
 ) {
   return useQuery({
-    queryKey: ["dashboard", "district-approvals", params.districtId, params.programId, params.quarter],
+    queryKey: ["dashboard", "district-approvals", params.districtId, params.projectType, params.quarter],
     queryFn: () => getDistrictApprovals(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchInterval: 1000 * 60 * 5, // 5 minutes

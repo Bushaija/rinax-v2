@@ -18,7 +18,8 @@ import { calculateAllocatedBudget, calculateSpentBudget, calculateUtilization } 
 interface AggregationFilters {
   facilityIds: number[];
   reportingPeriodId: number;
-  programId?: number;
+  /** Project type filter - valid values: "HIV", "Malaria", "TB" */
+  projectType?: string;
   quarter?: number;
 }
 
@@ -44,7 +45,11 @@ export async function getCurrentReportingPeriod() {
 /**
  * Fetch planning entries with filters
  * 
- * @param filters - Aggregation filters
+ * @param filters - Aggregation filters (facilityIds, reportingPeriodId, projectType, quarter)
+ * @param filters.facilityIds - Array of facility IDs to filter by
+ * @param filters.reportingPeriodId - Reporting period ID
+ * @param filters.projectType - Optional project type filter ("HIV", "Malaria", "TB")
+ * @param filters.quarter - Optional quarter filter
  * @returns Array of planning form data entries
  */
 export async function fetchPlanningEntries(filters: AggregationFilters) {
@@ -69,10 +74,9 @@ export async function fetchPlanningEntries(filters: AggregationFilters) {
     },
   });
 
-  // Apply program filter if provided
-  if (filters.programId !== undefined) {
-    const programIdStr = filters.programId.toString();
-    entries = entries.filter(entry => entry.project?.projectType === programIdStr);
+  // Apply projectType filter if provided
+  if (filters.projectType !== undefined) {
+    entries = entries.filter(entry => entry.project?.projectType === filters.projectType);
   }
 
   return entries;
@@ -81,7 +85,11 @@ export async function fetchPlanningEntries(filters: AggregationFilters) {
 /**
  * Fetch execution entries with filters
  * 
- * @param filters - Aggregation filters
+ * @param filters - Aggregation filters (facilityIds, reportingPeriodId, projectType, quarter)
+ * @param filters.facilityIds - Array of facility IDs to filter by
+ * @param filters.reportingPeriodId - Reporting period ID
+ * @param filters.projectType - Optional project type filter ("HIV", "Malaria", "TB")
+ * @param filters.quarter - Optional quarter filter
  * @returns Array of execution form data entries
  */
 export async function fetchExecutionEntries(filters: AggregationFilters) {
@@ -105,10 +113,9 @@ export async function fetchExecutionEntries(filters: AggregationFilters) {
     },
   });
 
-  // Apply program filter if provided
-  if (filters.programId !== undefined) {
-    const programIdStr = filters.programId.toString();
-    entries = entries.filter(entry => entry.project?.projectType === programIdStr);
+  // Apply projectType filter if provided
+  if (filters.projectType !== undefined) {
+    entries = entries.filter(entry => entry.project?.projectType === filters.projectType);
   }
 
   return entries;
@@ -118,6 +125,10 @@ export async function fetchExecutionEntries(filters: AggregationFilters) {
  * Aggregate budget data for a set of facilities
  * 
  * @param filters - Aggregation filters
+ * @param filters.facilityIds - Array of facility IDs to filter by
+ * @param filters.reportingPeriodId - Reporting period ID
+ * @param filters.projectType - Optional project type filter ("HIV", "Malaria", "TB")
+ * @param filters.quarter - Optional quarter filter
  * @returns Aggregated budget metrics
  */
 export async function aggregateBudgetData(
@@ -145,7 +156,7 @@ export async function aggregateBudgetData(
  * @param provinceId - Province ID
  * @param facilityIds - Accessible facility IDs
  * @param reportingPeriodId - Reporting period ID
- * @param programId - Optional program filter
+ * @param projectType - Optional project type filter ("HIV", "Malaria", "TB")
  * @param quarter - Optional quarter filter
  * @returns Array of district budget aggregations
  */
@@ -153,7 +164,7 @@ export async function aggregateByDistrict(
   provinceId: number,
   facilityIds: number[],
   reportingPeriodId: number,
-  programId?: number,
+  projectType?: string,
   quarter?: number
 ) {
   // Get all districts in the province
@@ -198,7 +209,7 @@ export async function aggregateByDistrict(
       const budgetData = await aggregateBudgetData({
         facilityIds: districtFacilityIds,
         reportingPeriodId,
-        programId,
+        projectType,
         quarter,
       });
 
@@ -220,7 +231,7 @@ export async function aggregateByDistrict(
  * @param districtId - District ID
  * @param facilityIds - Accessible facility IDs
  * @param reportingPeriodId - Reporting period ID
- * @param programId - Optional program filter
+ * @param projectType - Optional project type filter ("HIV", "Malaria", "TB")
  * @param quarter - Optional quarter filter
  * @returns Array of facility budget aggregations
  */
@@ -228,7 +239,7 @@ export async function aggregateByFacility(
   districtId: number,
   facilityIds: number[],
   reportingPeriodId: number,
-  programId?: number,
+  projectType?: string,
   quarter?: number
 ) {
   // Get facilities in the district
@@ -245,7 +256,7 @@ export async function aggregateByFacility(
       const budgetData = await aggregateBudgetData({
         facilityIds: [facility.id],
         reportingPeriodId,
-        programId,
+        projectType,
         quarter,
       });
 

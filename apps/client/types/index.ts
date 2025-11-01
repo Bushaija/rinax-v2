@@ -121,3 +121,6 @@ export type * from "./period-locks";
 
 // Financial Reports Approval Types
 export type * from "./financial-reports-approval";
+
+// Dashboard Types
+export type * from "./dashboard";

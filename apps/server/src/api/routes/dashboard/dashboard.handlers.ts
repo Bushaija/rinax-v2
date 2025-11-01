@@ -107,6 +107,14 @@ function calculateBudgetFromFormData(formData: any, entityType?: string): number
 export const getAccountantFacilityOverview: AppRouteHandler<GetAccountantFacilityOverviewRoute> = async (c) => {
   try {
     const userContext = await getUserContext(c);
+    
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/accountant/facility-overview',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     const { facilityId: queryFacilityId } = c.req.query();
     
     // Determine which facility/facilities to query
@@ -237,6 +245,14 @@ export const getAccountantFacilityOverview: AppRouteHandler<GetAccountantFacilit
 export const getAccountantTasks: AppRouteHandler<GetAccountantTasksRoute> = async (c) => {
   try {
     const userContext = await getUserContext(c);
+    
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/accountant/tasks',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     const { facilityId: queryFacilityId } = c.req.query();
     
     // Determine which facilities to query
@@ -362,6 +378,11 @@ export const getAccountantTasks: AppRouteHandler<GetAccountantTasksRoute> = asyn
       daysRemaining: Math.max(0, daysRemaining),
     }];
 
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=tasks instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
+
     return c.json({
       pendingPlans,
       pendingExecutions,
@@ -386,8 +407,15 @@ export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = as
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/metrics',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
-    const { level, provinceId, districtId, programId, quarter } = c.req.query();
+    const { level, provinceId, districtId, projectType, quarter } = c.req.query();
     
     // Validate required parameters based on level
     if (!level) {
@@ -422,7 +450,7 @@ export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = as
       const provinceIdNum = parseInt(provinceId!);
       
       // Validate user has access to this province
-      await validateProvinceAccess(provinceIdNum, userContext);
+      await validateProvinceAccess(userContext, provinceIdNum);
       
       // Get accessible facilities in the province
       facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
@@ -431,7 +459,7 @@ export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = as
       const districtIdNum = parseInt(districtId!);
       
       // Validate user has access to this district
-      await validateDistrictAccess(districtIdNum, userContext);
+      await validateDistrictAccess(userContext, districtIdNum);
       
       // Get accessible facilities in the district
       facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
@@ -454,8 +482,7 @@ export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = as
       }, HttpStatusCodes.OK);
     }
     
-    // Apply program and quarter filters
-    const programIdNum = programId ? parseInt(programId) : undefined;
+    // Apply project type and quarter filters
     const quarterNum = quarter ? parseInt(quarter) : undefined;
     
     // Validate quarter is between 1-4
@@ -467,9 +494,14 @@ export const getDashboardMetrics: AppRouteHandler<GetDashboardMetricsRoute> = as
     const metrics = await aggregateBudgetData({
       facilityIds,
       reportingPeriodId: currentPeriod.id,
-      programId: programIdNum,
+      projectType: projectType,
       quarter: quarterNum,
     });
+    
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=metrics instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
     
     // Return JSON response
     return c.json({
@@ -508,6 +540,13 @@ export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/program-distribution',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
     const { level, provinceId, districtId, quarter } = c.req.query();
     
@@ -534,7 +573,7 @@ export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute
         const provinceIdNum = parseInt(provinceId);
         
         // Validate user has access to this province
-        await validateProvinceAccess(provinceIdNum, userContext);
+        await validateProvinceAccess(userContext, provinceIdNum);
         
         // Get accessible facilities in the province
         facilityIds = await getAccessibleFacilitiesInProvince(userContext, provinceIdNum);
@@ -548,7 +587,7 @@ export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute
         const districtIdNum = parseInt(districtId);
         
         // Validate user has access to this district
-        await validateDistrictAccess(districtIdNum, userContext);
+        await validateDistrictAccess(userContext, districtIdNum);
         
         // Get accessible facilities in the district
         facilityIds = await getAccessibleFacilitiesInDistrict(userContext, districtIdNum);
@@ -639,6 +678,11 @@ export const getProgramDistribution: AppRouteHandler<GetProgramDistributionRoute
     // Sort by allocated budget descending
     const sortedPrograms = programsWithPercentage.sort((a, b) => b.allocatedBudget - a.allocatedBudget);
     
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=programDistribution instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
+    
     // Return JSON response
     return c.json({
       programs: sortedPrograms,
@@ -667,8 +711,15 @@ export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = as
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/budget-by-district',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
-    const { provinceId, programId, quarter } = c.req.query();
+    const { provinceId, projectType, quarter } = c.req.query();
     
     // Validate required parameters
     if (!provinceId) {
@@ -678,7 +729,7 @@ export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = as
     const provinceIdNum = parseInt(provinceId);
     
     // Validate user has access to this province
-    await validateProvinceAccess(provinceIdNum, userContext);
+    await validateProvinceAccess(userContext, provinceIdNum);
     
     // Get current active reporting period
     const currentPeriod = await getCurrentReportingPeriod();
@@ -699,8 +750,7 @@ export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = as
       }, HttpStatusCodes.OK);
     }
     
-    // Apply program and quarter filters
-    const programIdNum = programId ? parseInt(programId) : undefined;
+    // Apply project type and quarter filters
     const quarterNum = quarter ? parseInt(quarter) : undefined;
     
     // Validate quarter is between 1-4
@@ -713,7 +763,7 @@ export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = as
       provinceIdNum,
       facilityIds,
       currentPeriod.id,
-      programIdNum,
+      projectType,
       quarterNum
     );
     
@@ -725,6 +775,11 @@ export const getBudgetByDistrict: AppRouteHandler<GetBudgetByDistrictRoute> = as
       spentBudget: district.spent,
       utilizationPercentage: district.utilizationPercentage,
     }));
+    
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=budgetByDistrict instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
     
     // Return JSON response
     return c.json({
@@ -753,8 +808,15 @@ export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = as
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/budget-by-facility',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
-    const { districtId, programId, quarter } = c.req.query();
+    const { districtId, projectType, quarter } = c.req.query();
     
     // Validate required parameters
     if (!districtId) {
@@ -764,7 +826,7 @@ export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = as
     const districtIdNum = parseInt(districtId);
     
     // Validate user has access to this district
-    await validateDistrictAccess(districtIdNum, userContext);
+    await validateDistrictAccess(userContext, districtIdNum);
     
     // Get current active reporting period
     const currentPeriod = await getCurrentReportingPeriod();
@@ -785,8 +847,7 @@ export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = as
       }, HttpStatusCodes.OK);
     }
     
-    // Apply program and quarter filters
-    const programIdNum = programId ? parseInt(programId) : undefined;
+    // Apply project type and quarter filters
     const quarterNum = quarter ? parseInt(quarter) : undefined;
     
     // Validate quarter is between 1-4
@@ -799,7 +860,7 @@ export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = as
       districtIdNum,
       facilityIds,
       currentPeriod.id,
-      programIdNum,
+      projectType,
       quarterNum
     );
     
@@ -812,6 +873,11 @@ export const getBudgetByFacility: AppRouteHandler<GetBudgetByFacilityRoute> = as
       spentBudget: facility.spent,
       utilizationPercentage: facility.utilizationPercentage,
     }));
+    
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=budgetByFacility instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
     
     // Return JSON response
     return c.json({
@@ -840,8 +906,15 @@ export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSumm
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/province-approval-summary',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
-    const { provinceId, programId, quarter } = c.req.query();
+    const { provinceId, projectType, quarter } = c.req.query();
     
     // Validate required parameters
     if (!provinceId) {
@@ -851,7 +924,7 @@ export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSumm
     const provinceIdNum = parseInt(provinceId);
     
     // Validate user has access to this province
-    await validateProvinceAccess(provinceIdNum, userContext);
+    await validateProvinceAccess(userContext, provinceIdNum);
     
     // Get current active reporting period
     const currentPeriod = await getCurrentReportingPeriod();
@@ -872,8 +945,7 @@ export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSumm
       }, HttpStatusCodes.OK);
     }
     
-    // Apply program and quarter filters
-    const programIdNum = programId ? parseInt(programId) : undefined;
+    // Apply project type and quarter filters
     const quarterNum = quarter ? parseInt(quarter) : undefined;
     
     // Validate quarter is between 1-4
@@ -932,10 +1004,9 @@ export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSumm
     // Filter by accessible facilities
     planningEntries = planningEntries.filter(entry => facilityIds.includes(entry.facilityId));
     
-    // Apply program filter if provided
-    if (programIdNum !== undefined) {
-      const programIdStr = programIdNum.toString();
-      planningEntries = planningEntries.filter(entry => entry.project?.projectType === programIdStr);
+    // Apply project type filter if provided
+    if (projectType !== undefined) {
+      planningEntries = planningEntries.filter(entry => entry.project?.projectType === projectType);
     }
     
     // For each district, count planning entries by status
@@ -992,6 +1063,11 @@ export const getProvinceApprovalSummary: AppRouteHandler<GetProvinceApprovalSumm
       a.districtName.localeCompare(b.districtName)
     );
     
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=provinceApprovals instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
+    
     // Return JSON response
     return c.json({
       districts: sortedDistricts,
@@ -1019,8 +1095,15 @@ export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDeta
     // Validate user session
     const userContext = await getUserContext(c);
     
+    // Log legacy endpoint usage
+    console.log('[LEGACY ENDPOINT]', {
+      endpoint: '/api/dashboard/district-approval-details',
+      userId: userContext.userId,
+      timestamp: new Date().toISOString(),
+    });
+    
     // Get query parameters
-    const { districtId, programId, quarter } = c.req.query();
+    const { districtId, projectType, quarter } = c.req.query();
     
     // Validate required parameters
     if (!districtId) {
@@ -1030,7 +1113,7 @@ export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDeta
     const districtIdNum = parseInt(districtId);
     
     // Validate user has access to this district
-    await validateDistrictAccess(districtIdNum, userContext);
+    await validateDistrictAccess(userContext, districtIdNum);
     
     // Get current active reporting period
     const currentPeriod = await getCurrentReportingPeriod();
@@ -1051,8 +1134,7 @@ export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDeta
       }, HttpStatusCodes.OK);
     }
     
-    // Apply program and quarter filters
-    const programIdNum = programId ? parseInt(programId) : undefined;
+    // Apply project type and quarter filters
     const quarterNum = quarter ? parseInt(quarter) : undefined;
     
     // Validate quarter is between 1-4
@@ -1095,10 +1177,9 @@ export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDeta
     // Filter by accessible facilities
     planningEntries = planningEntries.filter(entry => facilityIds.includes(entry.facilityId));
     
-    // Apply program filter if provided
-    if (programIdNum !== undefined) {
-      const programIdStr = programIdNum.toString();
-      planningEntries = planningEntries.filter(entry => entry.project?.projectType === programIdStr);
+    // Apply project type filter if provided
+    if (projectType !== undefined) {
+      planningEntries = planningEntries.filter(entry => entry.project?.projectType === projectType);
     }
     
     // Build facility approval details
@@ -1138,6 +1219,11 @@ export const getDistrictApprovalDetails: AppRouteHandler<GetDistrictApprovalDeta
       if (facilityCompare !== 0) return facilityCompare;
       return a.projectName.localeCompare(b.projectName);
     });
+    
+    // Add deprecation warning header
+    c.header('X-Deprecated', 'true');
+    c.header('X-Deprecation-Message', 'This endpoint is deprecated. Please use /api/dashboard with components=districtApprovals instead.');
+    c.header('X-Deprecation-Date', '2025-01-26');
     
     // Return JSON response
     return c.json({

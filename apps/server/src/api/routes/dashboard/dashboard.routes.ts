@@ -144,7 +144,7 @@ export const getDashboardMetrics = createRoute({
       level: z.enum(['province', 'district']).describe("Aggregation level: province or district"),
       provinceId: z.string().optional().describe("Province ID (required when level=province)"),
       districtId: z.string().optional().describe("District ID (required when level=district)"),
-      programId: z.string().optional().describe("Optional program ID to filter by program"),
+      projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Optional project type to filter by program"),
       quarter: z.string().optional().describe("Optional quarter (1-4) to filter by quarter"),
     }),
   },
@@ -229,7 +229,7 @@ export const getBudgetByDistrict = createRoute({
   request: {
     query: z.object({
       provinceId: z.string().describe("Province ID (required)"),
-      programId: z.string().optional().describe("Optional program ID to filter by program"),
+      projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Optional project type to filter by program"),
       quarter: z.string().optional().describe("Optional quarter (1-4) to filter by quarter"),
     }),
   },
@@ -269,7 +269,7 @@ export const getBudgetByFacility = createRoute({
   request: {
     query: z.object({
       districtId: z.string().describe("District ID (required)"),
-      programId: z.string().optional().describe("Optional program ID to filter by program"),
+      projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Optional project type to filter by program"),
       quarter: z.string().optional().describe("Optional quarter (1-4) to filter by quarter"),
     }),
   },
@@ -310,7 +310,7 @@ export const getProvinceApprovalSummary = createRoute({
   request: {
     query: z.object({
       provinceId: z.string().describe("Province ID (required)"),
-      programId: z.string().optional().describe("Optional program ID to filter by program"),
+      projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Optional project type to filter by program"),
       quarter: z.string().optional().describe("Optional quarter (1-4) to filter by quarter"),
     }),
   },
@@ -353,7 +353,7 @@ export const getDistrictApprovalDetails = createRoute({
   request: {
     query: z.object({
       districtId: z.string().describe("District ID (required)"),
-      programId: z.string().optional().describe("Optional program ID to filter by program"),
+      projectType: z.enum(['HIV', 'Malaria', 'TB']).optional().describe("Optional project type to filter by program"),
       quarter: z.string().optional().describe("Optional quarter (1-4) to filter by quarter"),
     }),
   },

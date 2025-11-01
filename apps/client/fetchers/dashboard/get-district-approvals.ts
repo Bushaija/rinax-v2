@@ -1,6 +1,6 @@
 export interface GetDistrictApprovalsRequest {
   districtId: string | number;
-  programId?: string | number;
+  projectType?: string;
   quarter?: string | number;
 }
 
@@ -36,8 +36,8 @@ async function getDistrictApprovals(params: GetDistrictApprovalsRequest): Promis
   
   queryParams.append('districtId', params.districtId.toString());
 
-  if (params.programId) {
-    queryParams.append('programId', params.programId.toString());
+  if (params.projectType) {
+    queryParams.append('projectType', params.projectType);
   }
 
   if (params.quarter) {

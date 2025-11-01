@@ -20,7 +20,7 @@ import type { DashboardAccessRights } from "@/lib/dashboard-access-control";
 interface ProvinceTabProps {
   // Filter state
   provinceId?: string;
-  programId?: string;
+  projectType?: string;
   quarter?: string;
 
   // Filter options
@@ -29,7 +29,7 @@ interface ProvinceTabProps {
 
   // Filter handlers
   onProvinceChange: (value: string) => void;
-  onProgramChange: (value: string) => void;
+  onProjectTypeChange: (value: string) => void;
   onQuarterChange: (value: string) => void;
   onClearFilters: () => void;
 
@@ -89,12 +89,12 @@ interface ProvinceTabProps {
 
 export function ProvinceTab({
   provinceId,
-  programId,
+  projectType,
   quarter,
   provinces,
   programs,
   onProvinceChange,
-  onProgramChange,
+  onProjectTypeChange,
   onQuarterChange,
   onClearFilters,
   metricsData,
@@ -122,7 +122,7 @@ export function ProvinceTab({
       logDashboardError(parseDashboardError(metricsError), {
         component: "ProvinceTab",
         action: "fetchMetrics",
-        params: { provinceId, programId, quarter },
+        params: { provinceId, projectType, quarter },
       });
     }
     if (programDistributionError) {
@@ -136,14 +136,14 @@ export function ProvinceTab({
       logDashboardError(parseDashboardError(budgetByDistrictError), {
         component: "ProvinceTab",
         action: "fetchBudgetByDistrict",
-        params: { provinceId, programId, quarter },
+        params: { provinceId, projectType, quarter },
       });
     }
     if (provinceApprovalsError) {
       logDashboardError(parseDashboardError(provinceApprovalsError), {
         component: "ProvinceTab",
         action: "fetchProvinceApprovals",
-        params: { provinceId, programId, quarter },
+        params: { provinceId, projectType, quarter },
       });
     }
   }, [
@@ -152,7 +152,7 @@ export function ProvinceTab({
     budgetByDistrictError,
     provinceApprovalsError,
     provinceId,
-    programId,
+    projectType,
     quarter,
   ]);
 
@@ -188,9 +188,9 @@ export function ProvinceTab({
         provinces={provinces}
         onProvinceChange={onProvinceChange}
         disableProvinceFilter={!accessRights.canFilterByAnyProvince}
-        programId={programId}
+        projectType={projectType}
         programs={programs}
-        onProgramChange={onProgramChange}
+        onProjectTypeChange={onProjectTypeChange}
         quarter={quarter}
         onQuarterChange={onQuarterChange}
         onClearFilters={onClearFilters}

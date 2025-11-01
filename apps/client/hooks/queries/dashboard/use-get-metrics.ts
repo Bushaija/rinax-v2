@@ -6,7 +6,7 @@ export function useGetMetrics(
   options?: Omit<UseQueryOptions<MetricsResponse, Error>, 'queryKey' | 'queryFn'>
 ) {
   return useQuery({
-    queryKey: ["dashboard", "metrics", params.level, params.provinceId, params.districtId, params.programId, params.quarter],
+    queryKey: ["dashboard", "metrics", params.level, params.provinceId, params.districtId, params.projectType, params.quarter],
     queryFn: () => getMetrics(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchInterval: 1000 * 60 * 5, // 5 minutes

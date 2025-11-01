@@ -2,7 +2,7 @@ export interface GetMetricsRequest {
   level: 'province' | 'district';
   provinceId?: string | number;
   districtId?: string | number;
-  programId?: string | number;
+  projectType?: string;
   quarter?: string | number;
 }
 
@@ -46,8 +46,8 @@ async function getMetrics(params: GetMetricsRequest): Promise<MetricsResponse> {
     queryParams.append('provinceId', params.provinceId.toString());
   }
 
-  if (params.programId) {
-    queryParams.append('programId', params.programId.toString());
+  if (params.projectType) {
+    queryParams.append('projectType', params.projectType);
   }
 
   if (params.quarter) {

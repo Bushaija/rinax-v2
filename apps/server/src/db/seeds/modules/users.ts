@@ -10,10 +10,10 @@ export default async function seed(db: Database) {
   try {
     // First, find the facility ID for "ruhengeri referral" hospital in "musanze" district
     const facility = await db
-      .select({ 
+      .select({
         id: schema.facilities.id,
         name: schema.facilities.name,
-        districtName: schema.districts.name 
+        districtName: schema.districts.name
       })
       .from(schema.facilities)
       .innerJoin(schema.districts, eq(schema.facilities.districtId, schema.districts.id))
@@ -29,14 +29,14 @@ export default async function seed(db: Database) {
       console.error("Facility 'ruhengeri referral' in 'musanze' district not found!");
       console.log("Available facilities in musanze district:");
       const musanzeFacilities = await db
-        .select({ 
+        .select({
           id: schema.facilities.id,
-          name: schema.facilities.name 
+          name: schema.facilities.name
         })
         .from(schema.facilities)
         .innerJoin(schema.districts, eq(schema.facilities.districtId, schema.districts.id))
         .where(eq(schema.districts.name, "musanze"));
-      
+
       console.log(musanzeFacilities.map(f => `- ${f.name} (ID: ${f.id})`).join('\n'));
       return;
     }

@@ -26,9 +26,9 @@ export interface DashboardFiltersProps {
   disableDistrictFilter?: boolean;
 
   // Common filters
-  programId?: string;
+  projectType?: string;
   programs?: Array<{ id: number; name: string }>;
-  onProgramChange?: (value: string) => void;
+  onProjectTypeChange?: (value: string) => void;
 
   quarter?: string;
   onQuarterChange?: (value: string) => void;
@@ -46,9 +46,9 @@ export function DashboardFilters({
   districts = [],
   onDistrictChange,
   disableDistrictFilter = false,
-  programId,
+  projectType,
   programs = [],
-  onProgramChange,
+  onProjectTypeChange,
   quarter,
   onQuarterChange,
   onClearFilters,
@@ -56,7 +56,7 @@ export function DashboardFilters({
   const hasActiveFilters = Boolean(
     (activeTab === "province" && provinceId) ||
     (activeTab === "district" && districtId) ||
-    programId ||
+    projectType ||
     quarter
   );
 
@@ -107,16 +107,20 @@ export function DashboardFilters({
           </div>
         )}
 
-        {/* Program filter - show on both tabs */}
+        {/* Project Type filter - show on both tabs */}
         {programs.length > 0 && (
           <div className="w-full">
-            <Select value={programId || ""} onValueChange={onProgramChange}>
+            <Select 
+              value={projectType || "all"} 
+              onValueChange={(value) => onProjectTypeChange?.(value === "all" ? "" : value)}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Select program" />
+                <SelectValue placeholder="All Programs" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Programs</SelectItem>
                 {programs.map((program) => (
-                  <SelectItem key={program.id} value={String(program.id)}>
+                  <SelectItem key={program.id} value={program.name}>
                     {program.name}
                   </SelectItem>
                 ))}
